@@ -9,7 +9,8 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "install:all": "cd server && npm install && cd ../client && npm install",
     "seed": "cd server && npm run seed",
-    "build": "cd client && npm run build"
+    "build": "cd client && npm run build",
+    "vercel-build": "cd client && npm install && npm run build"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
