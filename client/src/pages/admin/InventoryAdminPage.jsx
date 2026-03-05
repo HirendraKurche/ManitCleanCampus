@@ -69,34 +69,36 @@ export default function InventoryAdminPage() {
                     {/* Stock Summary */}
                     {summary.length > 0 && (
                         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
-                                        <th className="px-5 py-3">Item</th>
-                                        <th className="px-5 py-3">Category</th>
-                                        <th className="px-5 py-3">Total Qty</th>
-                                        <th className="px-5 py-3">Transactions</th>
-                                        <th className="px-5 py-3">Last Update</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {summary.map((row, i) => (
-                                        <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                                            <td className="px-5 py-3.5 text-white text-sm font-medium">{row.item}</td>
-                                            <td className="px-5 py-3.5 text-slate-400 text-sm">{row.category || '—'}</td>
-                                            <td className="px-5 py-3.5">
-                                                <span className={`font-bold text-sm ${row.totalQty > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {row.totalQty} {row.unit}
-                                                </span>
-                                            </td>
-                                            <td className="px-5 py-3.5 text-slate-400 text-sm">{row.txCount}</td>
-                                            <td className="px-5 py-3.5 text-slate-500 text-xs">
-                                                {row.lastUpdate ? new Date(row.lastUpdate).toLocaleDateString() : '—'}
-                                            </td>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left whitespace-nowrap">
+                                    <thead>
+                                        <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                                            <th className="px-5 py-3">Item</th>
+                                            <th className="px-5 py-3">Category</th>
+                                            <th className="px-5 py-3">Total Qty</th>
+                                            <th className="px-5 py-3">Transactions</th>
+                                            <th className="px-5 py-3">Last Update</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {summary.map((row, i) => (
+                                            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                                                <td className="px-5 py-3.5 text-white text-sm font-medium">{row.item}</td>
+                                                <td className="px-5 py-3.5 text-slate-400 text-sm">{row.category || '—'}</td>
+                                                <td className="px-5 py-3.5">
+                                                    <span className={`font-bold text-sm ${row.totalQty > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                        {row.totalQty} {row.unit}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-3.5 text-slate-400 text-sm">{row.txCount}</td>
+                                                <td className="px-5 py-3.5 text-slate-500 text-xs">
+                                                    {row.lastUpdate ? new Date(row.lastUpdate).toLocaleDateString() : '—'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
 

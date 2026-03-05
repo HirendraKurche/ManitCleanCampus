@@ -51,12 +51,12 @@ export default function TaskAuditPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-white">Task Audit Gallery</h1>
-                    <p className="text-slate-400 text-sm mt-1">Before & After visual verification</p>
+            <div className="flex items-center justify-between flex-wrap gap-3 md:gap-4">
+                <div className="mb-2 md:mb-0">
+                    <h1 className="text-xl md:text-2xl font-bold text-white">Task Audit Gallery</h1>
+                    <p className="text-slate-400 text-xs md:text-sm mt-1">Before & After visual verification</p>
                 </div>
-                <div className="flex items-center flex-wrap gap-3">
+                <div className="flex items-center flex-wrap gap-2 md:gap-3 w-full md:w-auto">
                     <select
                         value={areaFilter}
                         onChange={(e) => setAreaFilter(e.target.value)}

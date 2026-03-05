@@ -66,8 +66,8 @@ export default function UsersPage() {
 
             {/* Create Form */}
             {showCreate && (
-                <form onSubmit={handleCreate} className="bg-slate-900/60 border border-blue-500/30 rounded-2xl p-5 space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
+                <form onSubmit={handleCreate} className="bg-slate-900/60 border border-blue-500/30 rounded-2xl p-4 md:p-5 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full Name *" required className="px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Phone *" className="px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email (optional)" className="px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -80,7 +80,7 @@ export default function UsersPage() {
                     </div>
                     {error && <p className="text-red-400 text-sm">{error}</p>}
                     {success && <p className="text-emerald-400 text-sm">{success}</p>}
-                    <button type="submit" className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors">Create Account</button>
+                    <button type="submit" className="w-full md:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-xl transition-colors">Create Account</button>
                 </form>
             )}
 
@@ -89,50 +89,52 @@ export default function UsersPage() {
                 <div className="text-center py-12 text-slate-500">Loading...</div>
             ) : (
                 <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
-                                <th className="px-5 py-3">Code</th>
-                                <th className="px-5 py-3">Name</th>
-                                <th className="px-5 py-3">Phone</th>
-                                <th className="px-5 py-3">Role</th>
-                                <th className="px-5 py-3">Areas</th>
-                                <th className="px-5 py-3">Status</th>
-                                <th className="px-5 py-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {users.map((u) => (
-                                <tr key={u._id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                                    <td className="px-5 py-3.5 text-blue-400 text-sm font-mono font-medium">{u.employeeCode}</td>
-                                    <td className="px-5 py-3.5 text-white text-sm">{u.name}</td>
-                                    <td className="px-5 py-3.5 text-slate-400 text-sm">{u.phone || u.email || '—'}</td>
-                                    <td className="px-5 py-3.5">
-                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${u.role === 'Admin' ? 'bg-purple-500/15 text-purple-400' : 'bg-blue-500/15 text-blue-400'
-                                            }`}>{u.role}</span>
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        <div className="flex flex-wrap gap-1">
-                                            {u.assignedAreas?.map((a) => (
-                                                <span key={a} className="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] rounded-md">{a}</span>
-                                            )) || '—'}
-                                        </div>
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${u.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                                            }`}>{u.isActive ? 'Active' : 'Inactive'}</span>
-                                    </td>
-                                    <td className="px-5 py-3.5">
-                                        <button
-                                            onClick={() => toggleActive(u)}
-                                            className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${u.isActive ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                                                }`}
-                                        >{u.isActive ? 'Deactivate' : 'Activate'}</button>
-                                    </td>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left whitespace-nowrap">
+                            <thead>
+                                <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                                    <th className="px-5 py-3">Code</th>
+                                    <th className="px-5 py-3">Name</th>
+                                    <th className="px-5 py-3">Phone</th>
+                                    <th className="px-5 py-3">Role</th>
+                                    <th className="px-5 py-3">Areas</th>
+                                    <th className="px-5 py-3">Status</th>
+                                    <th className="px-5 py-3">Actions</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {users.map((u) => (
+                                    <tr key={u._id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                                        <td className="px-5 py-3.5 text-blue-400 text-sm font-mono font-medium">{u.employeeCode}</td>
+                                        <td className="px-5 py-3.5 text-white text-sm">{u.name}</td>
+                                        <td className="px-5 py-3.5 text-slate-400 text-sm">{u.phone || u.email || '—'}</td>
+                                        <td className="px-5 py-3.5">
+                                            <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${u.role === 'Admin' ? 'bg-purple-500/15 text-purple-400' : 'bg-blue-500/15 text-blue-400'
+                                                }`}>{u.role}</span>
+                                        </td>
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex flex-wrap gap-1">
+                                                {u.assignedAreas?.map((a) => (
+                                                    <span key={a} className="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] rounded-md">{a}</span>
+                                                )) || '—'}
+                                            </div>
+                                        </td>
+                                        <td className="px-5 py-3.5">
+                                            <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${u.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                                                }`}>{u.isActive ? 'Active' : 'Inactive'}</span>
+                                        </td>
+                                        <td className="px-5 py-3.5">
+                                            <button
+                                                onClick={() => toggleActive(u)}
+                                                className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${u.isActive ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                                                    }`}
+                                            >{u.isActive ? 'Deactivate' : 'Activate'}</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>
