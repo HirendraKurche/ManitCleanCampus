@@ -1,0 +1,227 @@
+import { useRef, useState, useCallback, useEffect } from 'react';
+
+/**
+ * CameraCapture — uses getUserMedia for live camera feed.
+ *
+ * Props:
+ *   onCapture(blob)  — called with the image Blob after capture
+ *   label            — button text (e.g. "Take Selfie", "Before Photo")
+ *   facingMode       — 'environment' (rear) or 'user' (front/selfie)
+ *   autoStart        — if true, camera starts immediately on mount
+ */
+export default function CameraCapture({ onCapture, label = 'Take Photo', facingMode = 'user', autoStart = true }) {
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const streamRef = useRef(null);
+    const [active, setActive] = useState(false);
+    const [preview, setPreview] = useState(null);
+    const [error, setError] = useState(null);
+    const [videoReady, setVideoReady] = useState(false);
+
+    const stopCamera = useCallback(() => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+        }
+        setActive(false);
+        setVideoReady(false);
+    }, []);
+
+    const startCamera = useCallback(async () => {
+        setError(null);
+        setVideoReady(false);
+        try {
+            // Check if getUserMedia is available
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setError('Camera not supported on this browser. Try using Chrome or Edge.');
+                return;
+            }
+
+            // Stop any existing stream first
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((t) => t.stop());
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false,
+            });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                // Wait for video to actually start playing
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current.play().then(() => {
+                        setVideoReady(true);
+                    }).catch(() => {
+                        setVideoReady(true); // Still set ready even if autoplay fails
+                    });
+                };
+            }
+            setActive(true);
+        } catch (err) {
+            console.error('[camera]', err);
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                setError(
+                    'Camera permission denied. Please click the camera icon in your browser\'s address bar and allow access, then try again.'
+                );
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                setError('No camera found on this device.');
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                setError('Camera is in use by another application. Please close it and try again.');
+            } else if (err.name === 'OverconstrainedError') {
+                // Try again without facing mode constraint
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false,
+                    });
+                    streamRef.current = stream;
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        videoRef.current.onloadedmetadata = () => {
+                            videoRef.current.play().then(() => setVideoReady(true)).catch(() => setVideoReady(true));
+                        };
+                    }
+                    setActive(true);
+                    return;
+                } catch {
+                    setError('Could not access your camera. Please check your device settings.');
+                }
+            } else {
+                setError(`Camera error: ${err.message}`);
+            }
+        }
+    }, [facingMode]);
+
+    // Auto-start camera on mount if autoStart is true
+    useEffect(() => {
+        if (autoStart) {
+            startCamera();
+        }
+        // Cleanup on unmount
+        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((t) => t.stop());
+                streamRef.current = null;
+            }
+        };
+    }, [autoStart, startCamera]);
+
+    const capture = useCallback(() => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+
+        canvas.toBlob(
+            (blob) => {
+                if (blob) {
+                    setPreview(URL.createObjectURL(blob));
+                    onCapture(blob);
+                    stopCamera();
+                }
+            },
+            'image/jpeg',
+            0.85
+        );
+    }, [onCapture, stopCamera]);
+
+    const retake = () => {
+        setPreview(null);
+        startCamera();
+    };
+
+    // Preview mode
+    if (preview) {
+        return (
+            <div className="space-y-3">
+                <img src={preview} alt="Captured" className="w-full rounded-xl border border-slate-700 shadow-lg" />
+                <button
+                    type="button"
+                    onClick={retake}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition-colors"
+                >
+                    ↻ Retake Photo
+                </button>
+            </div>
+        );
+    }
+
+    // Camera active — show live feed
+    if (active) {
+        return (
+            <div className="space-y-3">
+                <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-black">
+                    <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full"
+                        style={{ minHeight: '240px' }}
+                    />
+                    {!videoReady && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                            <div className="flex flex-col items-center gap-2">
+                                <svg className="w-8 h-8 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                <span className="text-slate-400 text-sm">Starting camera...</span>
+                            </div>
+                        </div>
+                    )}
+                    {videoReady && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 flex justify-center">
+                            <button
+                                type="button"
+                                onClick={capture}
+                                className="w-16 h-16 rounded-full bg-white border-4 border-slate-300 shadow-xl hover:scale-105 active:scale-95 transition-transform"
+                            >
+                                <span className="sr-only">Capture</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+                <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="w-full py-2 text-slate-500 text-sm hover:text-slate-300 transition-colors"
+                >
+                    Cancel
+                </button>
+                <canvas ref={canvasRef} className="hidden" />
+            </div>
+        );
+    }
+
+    // Default — trigger button (shown when autoStart is false or camera failed)
+    return (
+        <div className="space-y-2">
+            <button
+                type="button"
+                onClick={startCamera}
+                className="w-full py-3.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 border-dashed rounded-xl text-slate-300 font-medium flex items-center justify-center gap-2 transition-all hover:border-blue-500/50"
+            >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                {error ? 'Retry Camera' : label}
+            </button>
+            {error && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
+                    <p>{error}</p>
+                    <p className="text-red-500/60 text-xs mt-1">
+                        Tip: On Chrome, click the 🔒 icon in the address bar → Site settings → Camera → Allow
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
