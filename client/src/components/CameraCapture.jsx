@@ -18,6 +18,14 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
     const [error, setError] = useState(null);
     const [videoReady, setVideoReady] = useState(false);
 
+    const handleVideoRef = useCallback((node) => {
+        videoRef.current = node;
+        if (node && streamRef.current) {
+            node.srcObject = streamRef.current;
+            node.play().catch((err) => console.log('Autoplay prevented:', err));
+        }
+    }, []);
+
     const stopCamera = useCallback(() => {
         if (streamRef.current) {
             streamRef.current.getTracks().forEach((t) => t.stop());
@@ -49,14 +57,7 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
             streamRef.current = stream;
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                // Wait for video to actually start playing
-                videoRef.current.onloadedmetadata = () => {
-                    videoRef.current.play().then(() => {
-                        setVideoReady(true);
-                    }).catch(() => {
-                        setVideoReady(true); // Still set ready even if autoplay fails
-                    });
-                };
+                videoRef.current.play().catch(() => { });
             }
             setActive(true);
         } catch (err) {
@@ -79,9 +80,7 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
                     streamRef.current = stream;
                     if (videoRef.current) {
                         videoRef.current.srcObject = stream;
-                        videoRef.current.onloadedmetadata = () => {
-                            videoRef.current.play().then(() => setVideoReady(true)).catch(() => setVideoReady(true));
-                        };
+                        videoRef.current.play().catch(() => { });
                     }
                     setActive(true);
                     return;
@@ -158,10 +157,12 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
             <div className="space-y-3">
                 <div className="relative rounded-xl overflow-hidden border border-slate-700 bg-black">
                     <video
-                        ref={videoRef}
+                        ref={handleVideoRef}
                         autoPlay
                         playsInline
                         muted
+                        onCanPlay={() => setVideoReady(true)}
+                        onLoadedMetadata={() => setVideoReady(true)}
                         className="w-full"
                         style={{ minHeight: '240px' }}
                     />
