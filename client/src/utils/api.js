@@ -7,7 +7,7 @@ import axios from 'axios';
  * On 401 responses, clears the stored token and redirects to login.
  */
 const api = axios.create({
-  baseURL: '',  // Vite proxy handles /api → localhost:5000
+  baseURL: import.meta.env.VITE_API_URL || '', // Falls back to relative path if not set
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true, // send httpOnly cookies too
 });
