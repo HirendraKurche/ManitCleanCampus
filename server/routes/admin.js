@@ -73,6 +73,8 @@ router.get('/tasks', async (req, res, next) => {
     if (req.query.status)   filter.status = req.query.status;
     if (req.query.flagged)  filter.flaggedForReview = req.query.flagged === 'true';
     if (req.query.aiStatus) filter.photoAiStatus = req.query.aiStatus;
+    if (req.query.workerId) filter.worker = req.query.workerId;
+    if (req.query.area)     filter.area = req.query.area;
 
     const tasks = await Task.find(filter)
       .populate('worker', 'name employeeCode')

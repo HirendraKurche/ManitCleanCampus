@@ -1,11 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../../utils/api';
 
 export default function TaskAuditPage() {
     const [tasks, setTasks] = useState([]);
-    const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+    const [users, setUsers] = useState([]);
+    const [date, setDate] = useState(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
     const [filter, setFilter] = useState('all');
+    const [workerFilter, setWorkerFilter] = useState('all');
+    const [areaFilter, setAreaFilter] = useState('all');
     const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        // Fetch users to populate worker options
+        api.get('/api/admin/users')
+            .then(res => setUsers(res.data.data || []))
+            .catch(err => console.error('[TaskAudit] Error fetching users', err));
+    }, []);
 
     useEffect(() => {
         (async () => {
@@ -14,6 +24,9 @@ export default function TaskAuditPage() {
                 let url = `/api/admin/tasks?date=${date}`;
                 if (filter === 'flagged') url += '&flagged=true';
                 if (filter === 'ai_flagged') url += '&aiStatus=flagged_identical';
+                if (workerFilter !== 'all') url += `&workerId=${workerFilter}`;
+                if (areaFilter !== 'all') url += `&area=${encodeURIComponent(areaFilter)}`;
+
                 const { data } = await api.get(url);
                 setTasks(data.data || []);
             } catch (err) {
@@ -22,25 +35,60 @@ export default function TaskAuditPage() {
                 setLoading(false);
             }
         })();
-    }, [date, filter]);
+    }, [date, filter, workerFilter, areaFilter]);
+
+    // Extract unique workers and areas from fetched users
+    const workers = useMemo(() => users.filter(u => u.role === 'Worker'), [users]);
+    const areas = useMemo(() => {
+        const allAreas = new Set();
+        users.forEach(u => {
+            if (u.assignedAreas) {
+                u.assignedAreas.forEach(a => allAreas.add(a));
+            }
+        });
+        return Array.from(allAreas).sort();
+    }, [users]);
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Task Audit Gallery</h1>
                     <p className="text-slate-400 text-sm mt-1">Before & After visual verification</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center flex-wrap gap-3">
+                    <select
+                        value={areaFilter}
+                        onChange={(e) => setAreaFilter(e.target.value)}
+                        className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="all">All Buildings/Areas</option>
+                        {areas.map(area => (
+                            <option key={area} value={area}>{area}</option>
+                        ))}
+                    </select>
+
+                    <select
+                        value={workerFilter}
+                        onChange={(e) => setWorkerFilter(e.target.value)}
+                        className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[150px] truncate"
+                    >
+                        <option value="all">All Workers</option>
+                        {workers.map(w => (
+                            <option key={w._id} value={w._id}>{w.name} ({w.employeeCode})</option>
+                        ))}
+                    </select>
+
                     <select
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                         className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                        <option value="all">All Tasks</option>
+                        <option value="all">All Statuses</option>
                         <option value="flagged">⚠ Flagged Only</option>
                         <option value="ai_flagged">🤖 AI Flagged</option>
                     </select>
+
                     <input
                         type="date"
                         value={date}
@@ -53,7 +101,7 @@ export default function TaskAuditPage() {
             {loading ? (
                 <div className="text-center py-12 text-slate-500">Loading...</div>
             ) : tasks.length === 0 ? (
-                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center text-slate-500">No tasks for this date</div>
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-12 text-center text-slate-500">No tasks match the selected filters</div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {tasks.map((task) => (

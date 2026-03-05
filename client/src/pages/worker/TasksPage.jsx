@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { addRecord, updateRecord, getAllRecords, saveImageBlob, STORES } from '../../utils/db';
 
 function todayStr() {
-    return new Date().toISOString().slice(0, 10);
+    return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
 function fmtDuration(seconds) {
@@ -114,8 +114,8 @@ export default function TasksPage() {
                                     key={area}
                                     onClick={() => setSelectedArea(area)}
                                     className={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${selectedArea === area
-                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 scale-[1.02]'
-                                            : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 border border-slate-700'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 scale-[1.02]'
+                                        : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 border border-slate-700'
                                         }`}
                                 >
                                     {area}
