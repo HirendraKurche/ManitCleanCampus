@@ -81,7 +81,12 @@ export default function AttendancePage() {
 
         try {
             if (todayRecord) {
-                const updated = { ...todayRecord, [stepKey]: stamp, deviceTimestamp: new Date().toISOString() };
+                const updated = {
+                    ...todayRecord,
+                    [stepKey]: stamp,
+                    deviceTimestamp: new Date().toISOString(),
+                    synced: false // FORCE sync engine to pick up this new stamp
+                };
                 await updateRecord(STORES.ATTENDANCE, updated);
                 await saveImageBlob(blob, STORES.ATTENDANCE, todayRecord.id, stepKey);
             } else {
