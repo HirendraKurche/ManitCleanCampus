@@ -4,6 +4,7 @@ import CameraCapture from '../../components/CameraCapture';
 import useGPS from '../../hooks/useGPS';
 import useSync from '../../hooks/useSync';
 import { addRecord, getAllRecords, updateRecord, saveImageBlob, STORES } from '../../utils/db';
+import api from '../../utils/api';
 
 const STEPS = ['checkIn', 'breakStart', 'breakEnd', 'checkOut'];
 const LABELS = { checkIn: 'Check In', breakStart: 'Start Break', breakEnd: 'End Break', checkOut: 'Check Out' };
@@ -28,7 +29,32 @@ export default function AttendancePage() {
     const loadToday = useCallback(async () => {
         if (!user) return;
         const all = await getAllRecords(STORES.ATTENDANCE);
-        const today = all.find((r) => r.date === todayStr() && r.workerId === user._id);
+        let today = all.find((r) => r.date === todayStr() && r.workerId === user._id);
+
+        // If local data was wiped (e.g. log in on new device or after manual clearing), fetch from server
+        if (!today && navigator.onLine) {
+            try {
+                const { data } = await api.get('/api/auth/attendance/today');
+                if (data.success && data.data) {
+                    const record = data.data;
+                    const idbRecord = {
+                        workerId: user._id,
+                        date: todayStr(),
+                        checkIn: record.checkIn,
+                        breakStart: record.breakStart,
+                        breakEnd: record.breakEnd,
+                        checkOut: record.checkOut,
+                        deviceTimestamp: new Date().toISOString(),
+                        synced: true
+                    };
+                    idbRecord.id = await addRecord(STORES.ATTENDANCE, idbRecord);
+                    today = idbRecord;
+                }
+            } catch (err) {
+                console.error('[attendance load]', err);
+            }
+        }
+
         if (today) {
             setTodayRecord(today);
             // Figure out which step we're on

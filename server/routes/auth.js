@@ -114,6 +114,18 @@ router.get('/me', protect(), (req, res) => {
   res.json({ success: true, user: req.user });
 });
 
+// ─── GET /api/auth/attendance/today ───────────────────────────────────────────
+const Attendance = require('../models/Attendance');
+router.get('/attendance/today', protect(), async (req, res, next) => {
+  try {
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const record = await Attendance.findOne({ worker: req.user._id, date: today });
+    res.json({ success: true, data: record });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/auth/logout ────────────────────────────────────────────────────
 router.post('/logout', (req, res) => {
   res.clearCookie('token');

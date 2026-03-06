@@ -15,6 +15,7 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
     const streamRef = useRef(null);
     const [active, setActive] = useState(false);
     const [preview, setPreview] = useState(null);
+    const [previewBlob, setPreviewBlob] = useState(null);
     const [error, setError] = useState(null);
     const [videoReady, setVideoReady] = useState(false);
 
@@ -135,18 +136,27 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
             (blob) => {
                 if (blob) {
                     setPreview(URL.createObjectURL(blob));
-                    onCapture(blob);
+                    setPreviewBlob(blob);
                     stopCamera();
                 }
             },
             'image/jpeg',
             0.85
         );
-    }, [onCapture, stopCamera, currentFacingMode]);
+    }, [stopCamera, currentFacingMode]);
 
     const retake = () => {
         setPreview(null);
+        setPreviewBlob(null);
         startCamera();
+    };
+
+    const confirmPhoto = () => {
+        if (previewBlob) {
+            onCapture(previewBlob);
+            setPreview(null);
+            setPreviewBlob(null);
+        }
     };
 
     // Preview mode
@@ -154,13 +164,22 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
         return (
             <div className="space-y-3">
                 <img src={preview} alt="Captured" className="w-full rounded-xl border border-slate-700 shadow-lg" />
-                <button
-                    type="button"
-                    onClick={retake}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition-colors"
-                >
-                    ↻ Retake Photo
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        type="button"
+                        onClick={retake}
+                        className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition-colors"
+                    >
+                        ↻ Retake
+                    </button>
+                    <button
+                        type="button"
+                        onClick={confirmPhoto}
+                        className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-xl transition-colors"
+                    >
+                        ✓ Use Photo
+                    </button>
+                </div>
             </div>
         );
     }

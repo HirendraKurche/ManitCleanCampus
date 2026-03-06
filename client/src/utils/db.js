@@ -154,6 +154,15 @@ export async function garbageCollect(storeName) {
 
   let cursor = await store.index('by-synced').openCursor(true); // synced === true
   while (cursor) {
+    // Retain today's attendance records so the UI doesn't reset check-in status
+    if (storeName === STORES.ATTENDANCE) {
+      const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      if (cursor.value.date === today) {
+        cursor = await cursor.continue();
+        continue;
+      }
+    }
+
     // Delete linked images
     const imgIndex = imageStore.index('by-linked');
     let imgCursor = await imgIndex.openCursor([storeName, cursor.value.id]);
