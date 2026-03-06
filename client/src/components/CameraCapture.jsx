@@ -18,6 +18,9 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
     const [error, setError] = useState(null);
     const [videoReady, setVideoReady] = useState(false);
 
+    // Manage local facing mode to allow flipping
+    const [currentFacingMode, setCurrentFacingMode] = useState(facingMode);
+
     const handleVideoRef = useCallback((node) => {
         videoRef.current = node;
         if (node && streamRef.current) {
@@ -51,7 +54,7 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode },
+                video: { facingMode: currentFacingMode },
                 audio: false,
             });
             streamRef.current = stream;
@@ -91,11 +94,11 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
                 setError(`Camera error: ${err.message}`);
             }
         }
-    }, [facingMode]);
+    }, [currentFacingMode]);
 
-    // Auto-start camera on mount if autoStart is true
+    // Auto-start camera on mount if autoStart is true, or when facingMode changes
     useEffect(() => {
-        if (autoStart) {
+        if (autoStart || active) {
             startCamera();
         }
         // Cleanup on unmount
@@ -105,7 +108,11 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
                 streamRef.current = null;
             }
         };
-    }, [autoStart, startCamera]);
+    }, [autoStart, startCamera]); // startCamera changes when currentFacingMode changes
+
+    const toggleCamera = () => {
+        setCurrentFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+    };
 
     const capture = useCallback(() => {
         const video = videoRef.current;
@@ -115,6 +122,13 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
+
+        // Mirror the image if using front camera so it looks like a mirror to the user
+        if (currentFacingMode === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+
         ctx.drawImage(video, 0, 0);
 
         canvas.toBlob(
@@ -128,7 +142,7 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
             'image/jpeg',
             0.85
         );
-    }, [onCapture, stopCamera]);
+    }, [onCapture, stopCamera, currentFacingMode]);
 
     const retake = () => {
         setPreview(null);
@@ -163,7 +177,7 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
                         muted
                         onCanPlay={() => setVideoReady(true)}
                         onLoadedMetadata={() => setVideoReady(true)}
-                        className="w-full"
+                        className={`w-full ${currentFacingMode === 'user' ? 'scale-x-[-1]' : ''}`}
                         style={{ minHeight: '240px' }}
                     />
                     {!videoReady && (
@@ -177,16 +191,34 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
                             </div>
                         </div>
                     )}
+
                     {videoReady && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 flex justify-center">
-                            <button
-                                type="button"
-                                onClick={capture}
-                                className="w-16 h-16 rounded-full bg-white border-4 border-slate-300 shadow-xl hover:scale-105 active:scale-95 transition-transform"
-                            >
-                                <span className="sr-only">Capture</span>
-                            </button>
-                        </div>
+                        <>
+                            {/* Flip overlay button */}
+                            <div className="absolute top-2 right-2">
+                                <button
+                                    type="button"
+                                    onClick={toggleCamera}
+                                    className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm transition-colors"
+                                    title="Flip Camera"
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {/* Capture button */}
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={capture}
+                                    className="w-16 h-16 rounded-full bg-white border-4 border-slate-300 shadow-xl hover:scale-105 active:scale-95 transition-transform"
+                                >
+                                    <span className="sr-only">Capture</span>
+                                </button>
+                            </div>
+                        </>
                     )}
                 </div>
                 <button
