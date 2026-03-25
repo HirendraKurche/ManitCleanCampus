@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import CameraCapture from '../../components/CameraCapture';
 import useGPS from '../../hooks/useGPS';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../utils/api';
 import { addRecord, updateRecord, getAllRecords, saveImageBlob, STORES } from '../../utils/db';
 
 function todayStr() {
@@ -29,6 +30,28 @@ export default function TasksPage() {
 
     // Load today's tasks
     const loadTasks = useCallback(async () => {
+        // Try to pull newly assigned tasks from server if online (like Student complaints)
+        if (navigator.onLine) {
+            try {
+                const { data } = await api.get('/api/sync/pull');
+                if (data?.success && data.tasks) {
+                    const localAll = await getAllRecords(STORES.TASKS);
+                    for (const serverTask of data.tasks) {
+                        const existsLocal = localAll.find(t => t.serverId === serverTask._id);
+                        if (!existsLocal) {
+                            await addRecord(STORES.TASKS, { 
+                                ...serverTask, 
+                                serverId: serverTask._id, 
+                                synced: true // it came from server, don't push until we modify it
+                            });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('[TasksPage] Failed to pull assigned tasks:', err);
+            }
+        }
+
         const all = await getAllRecords(STORES.TASKS);
         setTasks(all.filter((t) => t.date === todayStr()));
     }, []);
@@ -49,17 +72,34 @@ export default function TasksPage() {
     const handleBeforePhoto = async (blob) => {
         refreshGPS();
         const startedAt = new Date().toISOString();
-        const id = await addRecord(STORES.TASKS, {
-            area: selectedArea,
-            startedAt,
-            status: 'in_progress',
-            date: todayStr(),
-            beforeGps: { latitude, longitude },
-            deviceTimestamp: startedAt,
-        });
-        await saveImageBlob(blob, STORES.TASKS, id, 'beforePhoto');
-        const record = { id, area: selectedArea, startedAt, status: 'in_progress', date: todayStr() };
-        setActiveTask(record);
+        let currentTask;
+
+        if (activeTask && activeTask.id) {
+            // Starting a pre-assigned pending task
+            currentTask = {
+                ...activeTask,
+                startedAt,
+                status: 'in_progress',
+                beforeGps: { latitude, longitude },
+                deviceTimestamp: startedAt,
+                synced: false // force sync
+            };
+            await updateRecord(STORES.TASKS, currentTask);
+        } else {
+            // Creating a new spontaneous task
+            const id = await addRecord(STORES.TASKS, {
+                area: selectedArea,
+                startedAt,
+                status: 'in_progress',
+                date: todayStr(),
+                beforeGps: { latitude, longitude },
+                deviceTimestamp: startedAt,
+            });
+            currentTask = { id, area: selectedArea, startedAt, status: 'in_progress', date: todayStr() };
+        }
+
+        await saveImageBlob(blob, STORES.TASKS, currentTask.id, 'beforePhoto');
+        setActiveTask(currentTask);
         setPhase('running');
         setElapsed(0);
     };
@@ -80,6 +120,7 @@ export default function TasksPage() {
                 status: 'completed',
                 afterGps: { latitude, longitude },
                 deviceTimestamp: completedAt,
+                synced: false // force sync
             });
             await saveImageBlob(blob, STORES.TASKS, activeTask.id, 'afterPhoto');
         }
@@ -105,15 +146,15 @@ export default function TasksPage() {
 
             {phase === 'idle' && (
                 <>
-                    {/* Area Selection */}
+                    {/* Area Selection for new tasks */}
                     <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
-                        <h3 className="text-white font-medium text-sm">Select Area</h3>
+                        <h3 className="text-white font-medium text-sm">Select Area (New Task)</h3>
                         <div className="grid grid-cols-2 gap-2">
                             {areas.map((area) => (
                                 <button
                                     key={area}
-                                    onClick={() => setSelectedArea(area)}
-                                    className={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${selectedArea === area
+                                    onClick={() => { setSelectedArea(area); setActiveTask(null); }}
+                                    className={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${selectedArea === area && !activeTask
                                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 scale-[1.02]'
                                         : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700/60 border border-slate-700'
                                         }`}
@@ -122,7 +163,7 @@ export default function TasksPage() {
                                 </button>
                             ))}
                         </div>
-                        {selectedArea && (
+                        {selectedArea && !activeTask && (
                             <button
                                 onClick={() => setPhase('before')}
                                 className="w-full py-3.5 mt-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -135,19 +176,28 @@ export default function TasksPage() {
                     {/* Today's Tasks */}
                     {tasks.length > 0 && (
                         <div className="space-y-2">
-                            <h3 className="text-white font-medium text-sm">Today's Tasks</h3>
+                            <h3 className="text-white font-medium text-sm">Today's Assigned & Active Tasks</h3>
                             {tasks.map((t) => (
                                 <div key={t.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
                                     <div>
                                         <p className="text-white text-sm font-medium">{t.area}</p>
                                         <p className="text-slate-500 text-xs">
-                                            {t.durationSeconds ? fmtDuration(t.durationSeconds) : 'In progress...'}
+                                            {t.durationSeconds ? fmtDuration(t.durationSeconds) : t.status === 'pending' ? 'Not started (Assigned)' : 'In progress...'}
                                         </p>
                                     </div>
-                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${t.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                                        }`}>
-                                        {t.status === 'completed' ? '✓ Done' : '⏱ Active'}
-                                    </span>
+                                    {t.status === 'pending' ? (
+                                        <button 
+                                            onClick={() => { setSelectedArea(t.area); setActiveTask(t); setPhase('before'); }}
+                                            className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition-all"
+                                        >
+                                            Start
+                                        </button>
+                                    ) : (
+                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${t.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                                            }`}>
+                                            {t.status === 'completed' ? '✓ Done' : '⏱ Active'}
+                                        </span>
+                                    )}
                                 </div>
                             ))}
                         </div>

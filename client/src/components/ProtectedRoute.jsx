@@ -28,7 +28,8 @@ export default function ProtectedRoute({ children, roles = [] }) {
 
     if (roles.length > 0 && !roles.includes(user.role)) {
         // Role mismatch — redirect to appropriate dashboard
-        return <Navigate to={user.role === 'Admin' ? '/admin' : '/worker'} replace />;
+        const home = user.role === 'Admin' ? '/admin' : user.role === 'Student' ? '/student/complaints' : '/worker';
+        return <Navigate to={home} replace />;
     }
 
     return children;

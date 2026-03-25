@@ -2,6 +2,7 @@ const express = require('express');
 const protect = require('../middleware/auth');
 const Attendance = require('../models/Attendance');
 const Task = require('../models/Task');
+const Complaint = require('../models/Complaint');
 const { InventoryTx } = require('../models/Item');
 
 const router = express.Router();
@@ -92,12 +93,14 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
         if (drift.flaggedForReview) totalFlagged++;
 
         try {
-          // Use client-provided localId for idempotency if supplied
-          const filter = record.localId
+          // Match by serverId if it exists (for pre-assigned tasks), else localId, else natural key
+          const filter = record.serverId
+            ? { _id: record.serverId, worker: workerId }
+            : record.localId
             ? { 'meta.localId': record.localId, worker: workerId }
             : { worker: workerId, area: record.area, date: record.date, startedAt: record.startedAt };
 
-          await Task.findOneAndUpdate(
+          const updatedTask = await Task.findOneAndUpdate(
             filter,
             {
               $set: {
@@ -120,6 +123,15 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
             },
             { upsert: true, new: true }
           );
+
+          // Auto-complete any linked complaints
+          if (updatedTask && updatedTask.status === 'completed') {
+            await Complaint.findOneAndUpdate(
+              { linkedTaskId: updatedTask._id, status: { $in: ['assigned', 'in_progress'] } },
+              { $set: { status: 'completed' } }
+            );
+          }
+
           results.tasks++;
         } catch (e) {
           console.error('[sync] task record error:', e.message, record);
@@ -160,6 +172,18 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
         ? `${totalFlagged} record(s) flagged for Admin review due to device time drift`
         : 'All records synced cleanly',
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/sync/pull ───────────────────────────────────────────────────────
+// Worker pulls tasks assigned by supervisors/admins for today.
+router.get('/pull', protect(['Worker']), async (req, res, next) => {
+  try {
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const tasks = await Task.find({ worker: req.user._id, date: today }).lean();
+    res.json({ success: true, tasks });
   } catch (err) {
     next(err);
   }

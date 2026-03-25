@@ -1,3 +1,4 @@
+// pages/admin/OverviewPage.jsx — Updated with complaint stats
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 
@@ -6,41 +7,52 @@ function todayStr() {
 }
 
 export default function OverviewPage() {
-    const [stats, setStats] = useState({ users: 0, todayAttendance: 0, todayTasks: 0, flagged: 0 });
+    const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         (async () => {
             try {
+                // Try new overview endpoint first; fall back to original 4 calls
+                try {
+                    const res = await api.get('/api/admin/overview');
+                    if (res.data.success) { setData(res.data.data); return; }
+                } catch { /* New endpoint not deployed yet — use legacy calls */ }
+
+                // Legacy fallback
                 const [usersRes, rosterRes, tasksRes, flaggedRes] = await Promise.all([
                     api.get('/api/admin/users'),
                     api.get(`/api/admin/roster?date=${todayStr()}`),
                     api.get(`/api/admin/tasks?date=${todayStr()}`),
                     api.get('/api/admin/flagged'),
                 ]);
-                setStats({
-                    users: usersRes.data.data?.length || 0,
+                setData({
+                    users:           usersRes.data.data?.length || 0,
                     todayAttendance: rosterRes.data.data?.length || 0,
-                    todayTasks: tasksRes.data.data?.length || 0,
-                    flagged:
-                        (flaggedRes.data.data?.attendance?.length || 0) +
-                        (flaggedRes.data.data?.tasks?.length || 0) +
-                        (flaggedRes.data.data?.inventory?.length || 0),
+                    todayTasks:      tasksRes.data.data?.length || 0,
+                    flagged: (flaggedRes.data.data?.attendance?.length || 0) + (flaggedRes.data.data?.tasks?.length || 0) + (flaggedRes.data.data?.inventory?.length || 0),
+                    complaints: null,
                 });
-            } catch (err) {
-                console.error('[overview]', err);
-            } finally {
-                setLoading(false);
-            }
+            } catch (err) { console.error('[overview]', err); }
+            finally { setLoading(false); }
         })();
     }, []);
 
-    const cards = [
-        { label: 'Total Users', value: stats.users, icon: '👥', color: 'from-blue-500 to-blue-600' },
-        { label: 'Today Check-ins', value: stats.todayAttendance, icon: '📍', color: 'from-emerald-500 to-emerald-600' },
-        { label: 'Today Tasks', value: stats.todayTasks, icon: '📋', color: 'from-purple-500 to-purple-600' },
-        { label: 'Flagged Records', value: stats.flagged, icon: '⚠️', color: 'from-amber-500 to-amber-600' },
+    const mainCards = [
+        { label: 'Total Users',      value: data?.users            ?? 0, icon: '👥', color: 'from-blue-500 to-blue-600' },
+        { label: 'Today Check-ins',  value: data?.todayAttendance  ?? 0, icon: '📍', color: 'from-emerald-500 to-emerald-600' },
+        { label: 'Today Tasks',      value: data?.todayTasks       ?? 0, icon: '📋', color: 'from-purple-500 to-purple-600' },
+        { label: 'Flagged Records',  value: data?.flagged          ?? 0, icon: '⚠️', color: 'from-amber-500 to-amber-600' },
     ];
+
+    const complaintCards = data?.complaints ? [
+        { label: 'Open',        value: (data.complaints.submitted || 0) + (data.complaints.reopened || 0),  color: 'from-blue-500 to-blue-600' },
+        { label: 'Assigned',    value: data.complaints.assigned    || 0, color: 'from-purple-500 to-purple-600' },
+        { label: 'In Progress', value: data.complaints.in_progress || 0, color: 'from-amber-500 to-amber-600' },
+        { label: 'Completed',   value: data.complaints.completed   || 0, color: 'from-emerald-500 to-emerald-600' },
+        { label: 'Verified',    value: data.complaints.verified    || 0, color: 'from-teal-500 to-teal-600' },
+        { label: 'Total',       value: data.complaints.total       || 0, color: 'from-slate-500 to-slate-600' },
+    ] : [];
 
     if (loading) {
         return (
@@ -57,11 +69,15 @@ export default function OverviewPage() {
         <div className="space-y-6">
             <div>
                 <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-                <p className="text-slate-400 text-sm mt-1">Overview for {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                <p className="text-slate-400 text-sm mt-1">
+                    Overview for{' '}
+                    {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
             </div>
 
+            {/* Main stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {cards.map((card) => (
+                {mainCards.map((card) => (
                     <div key={card.label} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-all group">
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-2xl">{card.icon}</span>
@@ -72,6 +88,25 @@ export default function OverviewPage() {
                     </div>
                 ))}
             </div>
+
+            {/* Complaint breakdown */}
+            {complaintCards.length > 0 && (
+                <>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-white font-semibold">Complaints</h2>
+                        <div className="flex-1 h-px bg-slate-800" />
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                        {complaintCards.map((card) => (
+                            <div key={card.label} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-center hover:border-slate-700 transition-all group">
+                                <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${card.color} opacity-30 group-hover:opacity-50 transition-opacity mx-auto mb-2`} />
+                                <p className="text-2xl font-bold text-white">{card.value}</p>
+                                <p className="text-slate-500 text-xs mt-1">{card.label}</p>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 }

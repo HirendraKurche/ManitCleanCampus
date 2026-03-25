@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const protect = require('../middleware/auth');
+const Attendance = require('../models/Attendance');
 
 const router = express.Router();
 
@@ -71,6 +72,36 @@ router.post('/register', protect(['Admin']), async (req, res, next) => {
   }
 });
 
+// ─── POST /api/auth/register/student ─────────────────────────────────────────
+// Students self-register with their college email.
+// Role is locked to 'Student' — cannot be overridden.
+// Body: { name, email, password }
+router.post('/register/student', authLimiter, async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'name, email, and password are required',
+      });
+    }
+
+    // Optional: enforce college domain. Uncomment and set your domain.
+    // if (!email.endsWith('@manit.ac.in')) {
+    //   return res.status(400).json({ success: false, message: 'Use your college email' });
+    // }
+
+    const user = await User.create({ name, email, password, role: 'Student' });
+    sendToken(user, 201, res);
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: 'Email already registered' });
+    }
+    next(err);
+  }
+});
+
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
 /**
  * Universal login for Workers (phone + password) and Admins (email + password).
@@ -115,7 +146,6 @@ router.get('/me', protect(), (req, res) => {
 });
 
 // ─── GET /api/auth/attendance/today ───────────────────────────────────────────
-const Attendance = require('../models/Attendance');
 router.get('/attendance/today', protect(), async (req, res, next) => {
   try {
     const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);

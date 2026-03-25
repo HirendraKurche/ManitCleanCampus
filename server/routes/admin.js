@@ -4,11 +4,63 @@ const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const Task = require('../models/Task');
 const { ItemCatalogue, InventoryTx } = require('../models/Item');
+const Complaint = require('../models/Complaint');
 
 const router = express.Router();
 
 // All admin routes require Admin role
 router.use(protect(['Admin']));
+
+// ─── User Management ──────────────────────────────────────────────────────────
+
+// GET /api/admin/overview — dashboard stats including complaints
+router.get('/overview', async (req, res, next) => {
+  try {
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+
+    const [users, roster, tasks, flagged, complaintStats] = await Promise.all([
+      User.find({}).countDocuments(),
+      Attendance.find({ date: today }).countDocuments(),
+      Task.find({ date: today }).countDocuments(),
+      Promise.all([
+        Attendance.find({ flaggedForReview: true }).countDocuments(),
+        Task.find({ flaggedForReview: true }).countDocuments(),
+        InventoryTx.find({ flaggedForReview: true }).countDocuments(),
+      ]),
+      Complaint.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const complaintByStatus = complaintStats.reduce((acc, s) => {
+      acc[s._id] = s.count;
+      return acc;
+    }, {});
+
+    res.json({
+      success: true,
+      data: {
+        users,
+        todayAttendance: roster,
+        todayTasks:      tasks,
+        flagged:         flagged[0] + flagged[1] + flagged[2],
+        complaints: {
+          submitted:   complaintByStatus.submitted   || 0,
+          assigned:    complaintByStatus.assigned    || 0,
+          in_progress: complaintByStatus.in_progress || 0,
+          completed:   complaintByStatus.completed   || 0,
+          verified:    complaintByStatus.verified    || 0,
+          reopened:    complaintByStatus.reopened    || 0,
+          total: Object.values(complaintByStatus).reduce((a, b) => a + b, 0),
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── User Management ──────────────────────────────────────────────────────────
 

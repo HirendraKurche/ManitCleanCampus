@@ -1,3 +1,4 @@
+// App.jsx — UPDATED with complaint module routes
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import UpdateBanner from './components/UpdateBanner';
@@ -7,12 +8,14 @@ import ProtectedRoute from './components/ProtectedRoute';
 // Layouts
 import WorkerLayout from './layouts/WorkerLayout';
 import AdminLayout from './layouts/AdminLayout';
+import StudentLayout from './layouts/StudentLayout';
 
-// Pages
-import LoginPage from './pages/LoginPage';
+// Worker pages
 import AttendancePage from './pages/worker/AttendancePage';
 import TasksPage from './pages/worker/TasksPage';
 import InventoryPage from './pages/worker/InventoryPage';
+
+// Admin pages
 import OverviewPage from './pages/admin/OverviewPage';
 import RosterPage from './pages/admin/RosterPage';
 import TaskAuditPage from './pages/admin/TaskAuditPage';
@@ -20,11 +23,19 @@ import InventoryAdminPage from './pages/admin/InventoryAdminPage';
 import UsersPage from './pages/admin/UsersPage';
 import FlaggedPage from './pages/admin/FlaggedPage';
 
+// Complaint module pages
+import ComplaintsAdminPage from './pages/admin/ComplaintsAdminPage';
+import StudentComplaintsPage from './pages/student/StudentComplaintsPage';
+import SubmitComplaintPage from './pages/student/SubmitComplaintPage';
+import RegisterStudentPage from './pages/RegisterStudentPage';
+
 function RootRedirect() {
     const { user, loading } = useAuth();
     if (loading) return null;
     if (!user) return <Navigate to="/login" replace />;
-    return <Navigate to={user.role === 'Admin' ? '/admin' : '/worker/attendance'} replace />;
+    if (user.role === 'Admin')   return <Navigate to="/admin" replace />;
+    if (user.role === 'Student') return <Navigate to="/student/complaints" replace />;
+    return <Navigate to="/worker/attendance" replace />;
 }
 
 function App() {
@@ -36,6 +47,7 @@ function App() {
                 <Routes>
                     {/* Public */}
                     <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterStudentPage />} />
 
                     {/* Root redirect */}
                     <Route path="/" element={<RootRedirect />} />
@@ -70,6 +82,21 @@ function App() {
                         <Route path="inventory" element={<InventoryAdminPage />} />
                         <Route path="users" element={<UsersPage />} />
                         <Route path="flagged" element={<FlaggedPage />} />
+                        <Route path="complaints" element={<ComplaintsAdminPage />} />
+                    </Route>
+
+                    {/* Student Routes */}
+                    <Route
+                        path="/student"
+                        element={
+                            <ProtectedRoute roles={['Student']}>
+                                <StudentLayout />
+                            </ProtectedRoute>
+                        }
+                    >
+                        <Route index element={<Navigate to="complaints" replace />} />
+                        <Route path="complaints" element={<StudentComplaintsPage />} />
+                        <Route path="complaints/new" element={<SubmitComplaintPage />} />
                     </Route>
 
                     {/* Catch-all */}
@@ -82,4 +109,5 @@ function App() {
     );
 }
 
+import LoginPage from './pages/LoginPage';
 export default App;

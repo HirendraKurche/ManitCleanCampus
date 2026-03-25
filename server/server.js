@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const cloudinaryRoutes = require('./routes/cloudinary');
 const syncRoutes = require('./routes/sync');
 const adminRoutes = require('./routes/admin');
+const complaintRoutes = require('./routes/complaints');
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/cloudinary', cloudinaryRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/complaints', complaintRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
 
