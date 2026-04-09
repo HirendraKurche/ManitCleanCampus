@@ -35,10 +35,10 @@ export default function RegisterStudentPage() {
                 password: form.password,
             });
             if (data.success) {
-                // Store token then full-reload so AuthContext picks up the session
+                // Store token so login is immediate
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
-                window.location.href = '/student/complaints';
+                navigate('/student/complaints', { replace: true });
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Registration failed');

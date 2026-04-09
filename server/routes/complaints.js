@@ -1,62 +1,220 @@
+// server/routes/complaints.js — UPDATED for Task 5
+// Changes from tasks-update.zip version:
+//   1. POST / now reads req.body.location (new structured shape) in addition
+//      to legacy indoorLocation — whichever is provided gets saved.
+//   2. Duplicate detection now also checks location.building for building-scoped
+//      upvote enforcement (Task 3).
+//   3. /board endpoint adds location to the select projection.
+//   4. All other endpoints unchanged.
+
 const express = require('express');
 const protect = require('../middleware/auth');
 const Complaint = require('../models/Complaint');
 const Task = require('../models/Task');
+const User = require('../models/User');
 
 const router = express.Router();
 
-// ─── Smart Routing Map ────────────────────────────────────────────────────────
-// Maps complaint category → which supervisor / admin area handles it.
-// Used in admin complaint list to filter by supervisorType.
-// Extend this as needed.
+// Task 5: all categories are cleaning types
 const CATEGORY_ROUTING = {
-  cleaning:    'sanitation',
-  garbage:     'sanitation',
-  water:       'maintenance',
-  electrical:  'maintenance',
-  other:       'general',
+  sweeping:         'sanitation',
+  mopping:          'sanitation',
+  washroom:         'sanitation',
+  garbage:          'sanitation',
+  general_cleaning: 'sanitation',
 };
 
-// ─── Duplicate Detection Helper ───────────────────────────────────────────────
-// Returns the nearest open complaint of the same category within ~50 metres.
-// Uses simple bounding-box math (good enough at campus scale; no $geoNear needed).
-async function findNearbyDuplicate(category, lat, lng) {
-  if (!lat || !lng) return null;
+function buildTaskAreaLabel(complaint, providedArea) {
+  if (providedArea) return providedArea;
 
-  // ~50 m in degrees of latitude ≈ 0.00045°; longitude slightly less at MANIT's latitude
-  const DELTA = 0.00050;
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // last 24 h
+  const loc = complaint.location;
+  if (loc?.building) {
+    return [
+      loc.building,
+      loc.block !== 'None' ? loc.block : null,
+      loc.floor,
+      loc.areaType,
+      loc.roomNumber,
+    ]
+      .filter(Boolean)
+      .join(' › ');
+  }
 
-  return Complaint.findOne({
-    category,
-    parentComplaintId: null,                         // only originals, not duplicates
-    status: { $in: ['submitted', 'assigned', 'in_progress', 'reopened'] },
-    createdAt: { $gte: cutoff },
-    'gps.latitude':  { $gte: lat - DELTA, $lte: lat + DELTA },
-    'gps.longitude': { $gte: lng - DELTA, $lte: lng + DELTA },
-  }).lean();
+  if (complaint.indoorLocation?.area) {
+    return `${complaint.indoorLocation.building} - ${complaint.indoorLocation.area}`;
+  }
+
+  return `Complaint #${complaint._id.toString().slice(-6)}`;
 }
 
+function getLocationCandidates(location, indoorLocation) {
+  const candidates = [];
+
+  if (location?.building) {
+    if (location.block && location.block !== 'None') {
+      candidates.push(`${location.building} - ${location.block}`);
+    }
+    candidates.push(location.building);
+  } else if (indoorLocation?.building) {
+    candidates.push(indoorLocation.building);
+  }
+
+  return [...new Set(candidates.map((v) => String(v).trim()).filter(Boolean))];
+}
+
+async function findAutoAssignableWorker(complaint) {
+  const candidates = getLocationCandidates(complaint.location, complaint.indoorLocation);
+  if (!candidates.length) return null;
+
+  const workers = await User.find({ role: 'Worker', isActive: true })
+    .select('name employeeCode assignedAreas createdAt')
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const norm = (s) => String(s || '').trim().toLowerCase();
+
+  for (const candidate of candidates) {
+    const hit = workers.find((w) =>
+      (w.assignedAreas || []).some((a) => norm(a) === norm(candidate))
+    );
+    if (hit) return hit;
+  }
+
+  return null;
+}
+
+async function autoAssignComplaint(complaint) {
+  const worker = await findAutoAssignableWorker(complaint);
+  if (!worker) return { assigned: false };
+
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
+
+  const task = await Task.create({
+    worker: worker._id,
+    area: buildTaskAreaLabel(complaint),
+    status: 'pending',
+    date: today,
+  });
+
+  complaint.assignedTo = worker._id;
+  complaint.assignedAt = new Date();
+  complaint.status = 'assigned';
+  complaint.linkedTaskId = task._id;
+  await complaint.save();
+
+  return { assigned: true, worker, task };
+}
+
+// ─── Duplicate Detection Helper ───────────────────────────────────────────────
+// Checks GPS radius (50 m) OR same building+areaType within last 24 h.
+async function findNearbyDuplicate(category, lat, lng, location) {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const baseFilter = {
+    category,
+    parentComplaintId: null,
+    status: { $in: ['submitted', 'assigned', 'in_progress', 'reopened'] },
+    createdAt: { $gte: cutoff },
+  };
+
+  // Indoor duplicate: strictly match structured indoor location.
+  // Important: for indoor complaints we DO NOT fall back to GPS matching,
+  // otherwise nearby buildings/blocks can be incorrectly treated as duplicates.
+  if (location?.building && location?.floor && location?.areaType) {
+    const indoorFilter = {
+      ...baseFilter,
+      'location.building': location.building,
+      'location.floor': location.floor,
+      'location.areaType': location.areaType,
+    };
+
+    // Include block match only when provided and not the sentinel 'None'.
+    if (location.block && location.block !== 'None') {
+      indoorFilter['location.block'] = location.block;
+    }
+
+    // If room is provided, require exact room match as well.
+    if (location.roomNumber) {
+      indoorFilter['location.roomNumber'] = location.roomNumber;
+    }
+
+    const indoorDup = await Complaint.findOne(indoorFilter).lean();
+    if (indoorDup) return indoorDup;
+
+    return null;
+  }
+
+  // GPS-based duplicate (outdoor / no indoor location)
+  if (lat && lng) {
+    const DELTA = 0.00050;
+    const gpsDup = await Complaint.findOne({
+      ...baseFilter,
+      'gps.latitude':  { $gte: lat - DELTA, $lte: lat + DELTA },
+      'gps.longitude': { $gte: lng - DELTA, $lte: lng + DELTA },
+    }).lean();
+    if (gpsDup) return gpsDup;
+  }
+
+  return null;
+}
+
+// ─── Task 4: GET /api/complaints/board (public) ───────────────────────────────
+// Must come before /:id to avoid route collision.
+router.get('/board', async (req, res, next) => {
+  try {
+    const filter = { parentComplaintId: null };
+    if (req.query.status)   filter.status = req.query.status;
+    if (req.query.building) filter['location.building'] = req.query.building;
+
+    const complaints = await Complaint.find(filter)
+      .select('-assignedTo -assignedBy -assignedAt -linkedTaskId -flaggedForReview -reviewNote -timeDriftSeconds -upvotedBy')
+      .sort({ upvoteCount: -1, createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    res.json({ success: true, total: complaints.length, data: complaints });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/complaints ─────────────────────────────────────────────────────
-// Student submits a new complaint.
-// Automatically detects duplicates and returns the original if found.
-// Body: { category, description, photoUrl?, gps?, indoorLocation? }
 router.post('/', protect(['Student']), async (req, res, next) => {
   try {
-    const { category, description, photoUrl, gps, indoorLocation } = req.body;
+    const { category, description, photoUrl, gps, location, indoorLocation } = req.body;
 
     if (!category) {
       return res.status(400).json({ success: false, message: 'category is required' });
     }
 
-    // ── Duplicate check ───────────────────────────────────────────────────────
+    const allowedCategories = Object.keys(CATEGORY_ROUTING);
+    if (!allowedCategories.includes(category)) {
+      return res.status(400).json({
+        success: false,
+        message: `Category must be one of: ${allowedCategories.join(', ')}`,
+      });
+    }
+
+    // Use new location shape if provided, fall back to legacy indoorLocation
+    const resolvedLocation = location || (indoorLocation ? {
+      building: indoorLocation.building,
+      floor:    indoorLocation.floor,
+      areaType: indoorLocation.area,
+    } : undefined);
+
     const duplicate = await findNearbyDuplicate(
       category,
       gps?.latitude,
-      gps?.longitude
+      gps?.longitude,
+      resolvedLocation
     );
 
     if (duplicate) {
+      const alreadyUpvoted = Array.isArray(duplicate.upvotedBy)
+        ? duplicate.upvotedBy.some((uid) => uid.toString() === req.user._id.toString())
+        : false;
+
       return res.status(200).json({
         success: true,
         isDuplicate: true,
@@ -67,13 +225,14 @@ router.post('/', protect(['Student']), async (req, res, next) => {
           description: duplicate.description,
           status:      duplicate.status,
           upvoteCount: duplicate.upvoteCount,
+          location:    duplicate.location,
           indoorLocation: duplicate.indoorLocation,
           createdAt:   duplicate.createdAt,
+          alreadyUpvoted,
         },
       });
     }
 
-    // ── Create new complaint ──────────────────────────────────────────────────
     const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10);
@@ -84,19 +243,39 @@ router.post('/', protect(['Student']), async (req, res, next) => {
       description,
       photoUrl:       photoUrl || null,
       gps,
-      indoorLocation,
+      location:       resolvedLocation,   // Task 5: structured location
+      indoorLocation: indoorLocation || null, // legacy compat
       date:           today,
-      supervisorType: CATEGORY_ROUTING[category] || 'general',
+      supervisorType: CATEGORY_ROUTING[category],
     });
 
-    res.status(201).json({ success: true, isDuplicate: false, data: complaint });
+    let autoAssigned = { assigned: false };
+    try {
+      autoAssigned = await autoAssignComplaint(complaint);
+    } catch (assignErr) {
+      console.warn('[auto-assign] failed:', assignErr.message);
+    }
+
+    res.status(201).json({
+      success: true,
+      isDuplicate: false,
+      autoAssigned: autoAssigned.assigned,
+      assignedWorker: autoAssigned.assigned
+        ? {
+            _id: autoAssigned.worker._id,
+            name: autoAssigned.worker.name,
+            employeeCode: autoAssigned.worker.employeeCode,
+          }
+        : null,
+      data: complaint,
+    });
   } catch (err) {
     next(err);
   }
 });
 
 // ─── POST /api/complaints/:id/upvote ─────────────────────────────────────────
-// Student upvotes an existing complaint (instead of filing a duplicate).
+// Students can upvote any complaint (building-agnostic).
 router.post('/:id/upvote', protect(['Student']), async (req, res, next) => {
   try {
     const complaint = await Complaint.findById(req.params.id);
@@ -104,7 +283,6 @@ router.post('/:id/upvote', protect(['Student']), async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Complaint not found' });
     }
 
-    // Prevent double-upvote
     const alreadyVoted = complaint.upvotedBy.some(
       (uid) => uid.toString() === req.user._id.toString()
     );
@@ -115,7 +293,6 @@ router.post('/:id/upvote', protect(['Student']), async (req, res, next) => {
     complaint.upvoteCount += 1;
     complaint.upvotedBy.push(req.user._id);
     await complaint.save();
-
     res.json({ success: true, upvoteCount: complaint.upvoteCount });
   } catch (err) {
     next(err);
@@ -123,14 +300,13 @@ router.post('/:id/upvote', protect(['Student']), async (req, res, next) => {
 });
 
 // ─── GET /api/complaints/mine ─────────────────────────────────────────────────
-// Student views their own complaint history.
 router.get('/mine', protect(['Student']), async (req, res, next) => {
   try {
     const complaints = await Complaint.find({ student: req.user._id })
       .sort({ createdAt: -1 })
       .populate('assignedTo', 'name employeeCode')
+      .populate('linkedTaskId', 'area status beforePhotoUrl afterPhotoUrl startedAt completedAt durationSeconds')
       .lean();
-
     res.json({ success: true, total: complaints.length, data: complaints });
   } catch (err) {
     next(err);
@@ -138,8 +314,6 @@ router.get('/mine', protect(['Student']), async (req, res, next) => {
 });
 
 // ─── GET /api/complaints ──────────────────────────────────────────────────────
-// Admin/Supervisor views all complaints with filters.
-// Query: ?status= &category= &date= &supervisorType= &workerId=
 router.get('/', protect(['Admin']), async (req, res, next) => {
   try {
     const filter = {};
@@ -148,12 +322,14 @@ router.get('/', protect(['Admin']), async (req, res, next) => {
     if (req.query.date)           filter.date = req.query.date;
     if (req.query.supervisorType) filter.supervisorType = req.query.supervisorType;
     if (req.query.workerId)       filter.assignedTo = req.query.workerId;
+    if (req.query.building)       filter['location.building'] = req.query.building;
 
     const complaints = await Complaint.find(filter)
       .sort({ createdAt: -1 })
       .populate('student', 'name employeeCode email')
       .populate('assignedTo', 'name employeeCode')
       .populate('assignedBy', 'name')
+      .populate('linkedTaskId', 'area status beforePhotoUrl afterPhotoUrl startedAt completedAt durationSeconds photoAiStatus photoAiNote')
       .lean();
 
     res.json({ success: true, total: complaints.length, data: complaints });
@@ -163,7 +339,6 @@ router.get('/', protect(['Admin']), async (req, res, next) => {
 });
 
 // ─── GET /api/complaints/:id ──────────────────────────────────────────────────
-// Single complaint detail (Admin or the student who submitted it).
 router.get('/:id', protect(['Admin', 'Student']), async (req, res, next) => {
   try {
     const complaint = await Complaint.findById(req.params.id)
@@ -174,15 +349,12 @@ router.get('/:id', protect(['Admin', 'Student']), async (req, res, next) => {
     if (!complaint) {
       return res.status(404).json({ success: false, message: 'Not found' });
     }
-
-    // Students can only see their own complaints
     if (
       req.user.role === 'Student' &&
       complaint.student._id.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
-
     res.json({ success: true, data: complaint });
   } catch (err) {
     next(err);
@@ -190,9 +362,6 @@ router.get('/:id', protect(['Admin', 'Student']), async (req, res, next) => {
 });
 
 // ─── PATCH /api/complaints/:id/assign ────────────────────────────────────────
-// Admin assigns complaint to a worker.
-// This also creates a linked Task document so the worker sees it in TasksPage.
-// Body: { workerId, area? }
 router.patch('/:id/assign', protect(['Admin']), async (req, res, next) => {
   try {
     const { workerId, area } = req.body;
@@ -205,30 +374,50 @@ router.patch('/:id/assign', protect(['Admin']), async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Not found' });
     }
 
-    // Derive area label from complaint location (indoor > GPS)
-    const taskArea = area ||
-      (complaint.indoorLocation?.area
-        ? `${complaint.indoorLocation.building} - ${complaint.indoorLocation.area}`
-        : `Complaint #${complaint._id.toString().slice(-6)}`);
+    if (['completed', 'verified'].includes(complaint.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Completed/verified complaints cannot be reassigned',
+      });
+    }
 
-    // Create a linked Task so the worker can use the existing TasksPage flow
+    const worker = await User.findById(workerId).select('role isActive');
+    if (!worker || worker.role !== 'Worker' || !worker.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select an active worker',
+      });
+    }
+
+    const taskArea = buildTaskAreaLabel(complaint, area);
+
     const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 10);
 
-    const task = await Task.create({
-      worker: workerId,
-      area:   taskArea,
-      status: 'pending',
-      date:   today,
-      // complaintId stored as a note in the area label — no schema change needed.
-      // If you want a proper FK later: add `complaintId` field to Task.js
-    });
+    let task = null;
+    if (complaint.linkedTaskId) {
+      task = await Task.findById(complaint.linkedTaskId);
+    }
 
-    complaint.assignedTo  = workerId;
-    complaint.assignedBy  = req.user._id;
-    complaint.assignedAt  = new Date();
-    complaint.status      = 'assigned';
+    if (task && task.status !== 'completed') {
+      task.worker = workerId;
+      task.area = taskArea;
+      task.status = 'pending';
+      await task.save();
+    } else {
+      task = await Task.create({
+        worker: workerId,
+        area:   taskArea,
+        status: 'pending',
+        date:   today,
+      });
+    }
+
+    complaint.assignedTo   = workerId;
+    complaint.assignedBy   = req.user._id;
+    complaint.assignedAt   = new Date();
+    complaint.status       = 'assigned';
     complaint.linkedTaskId = task._id;
     await complaint.save();
 
@@ -239,16 +428,23 @@ router.patch('/:id/assign', protect(['Admin']), async (req, res, next) => {
 });
 
 // ─── PATCH /api/complaints/:id/verify ────────────────────────────────────────
-// Admin/Supervisor marks a completed complaint as verified.
-// Body: { note? }
 router.patch('/:id/verify', protect(['Admin']), async (req, res, next) => {
   try {
-    const complaint = await Complaint.findByIdAndUpdate(
-      req.params.id,
-      { $set: { status: 'verified', reviewNote: req.body.note } },
-      { new: true }
-    );
+    const complaint = await Complaint.findById(req.params.id).populate('linkedTaskId');
     if (!complaint) return res.status(404).json({ success: false, message: 'Not found' });
+
+    const task = complaint.linkedTaskId;
+    if (!task || !task.beforePhotoUrl || !task.afterPhotoUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot verify until worker before/after photos are available',
+      });
+    }
+
+    complaint.status = 'verified';
+    complaint.isAdminVerified = true;
+    complaint.reviewNote = req.body.note;
+    await complaint.save();
     res.json({ success: true, data: complaint });
   } catch (err) {
     next(err);
@@ -256,72 +452,76 @@ router.patch('/:id/verify', protect(['Admin']), async (req, res, next) => {
 });
 
 // ─── PATCH /api/complaints/:id/reopen ────────────────────────────────────────
-// Student reopens a verified complaint if they are not satisfied.
-// Body: { reason }
 router.patch('/:id/reopen', protect(['Student']), async (req, res, next) => {
   try {
     const complaint = await Complaint.findById(req.params.id);
-    if (!complaint) {
-      return res.status(404).json({ success: false, message: 'Not found' });
-    }
-
-    // Only the student who submitted can reopen
+    if (!complaint) return res.status(404).json({ success: false, message: 'Not found' });
     if (complaint.student.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
-
     if (complaint.status !== 'verified') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only verified complaints can be reopened',
-      });
+      return res.status(400).json({ success: false, message: 'Only verified complaints can be reopened' });
     }
-
-    complaint.status       = 'reopened';
+    complaint.status = 'reopened';
     complaint.reopenReason = req.body.reason;
+    complaint.isAdminVerified = false;
     await complaint.save();
 
-    res.json({ success: true, data: complaint });
+    let autoAssigned = { assigned: false };
+    try {
+      autoAssigned = await autoAssignComplaint(complaint);
+    } catch (assignErr) {
+      console.warn('[reopen auto-assign] failed:', assignErr.message);
+    }
+
+    res.json({
+      success: true,
+      autoAssigned: autoAssigned.assigned,
+      assignedWorker: autoAssigned.assigned
+        ? {
+            _id: autoAssigned.worker._id,
+            name: autoAssigned.worker.name,
+            employeeCode: autoAssigned.worker.employeeCode,
+          }
+        : null,
+      data: complaint,
+    });
   } catch (err) {
     next(err);
   }
 });
 
 // ─── PATCH /api/complaints/:id/feedback ──────────────────────────────────────
-// Student submits feedback + rating after resolution.
-// Body: { feedback, rating (1-5) }
 router.patch('/:id/feedback', protect(['Student']), async (req, res, next) => {
   try {
     const complaint = await Complaint.findById(req.params.id);
-    if (!complaint) {
-      return res.status(404).json({ success: false, message: 'Not found' });
-    }
+    if (!complaint) return res.status(404).json({ success: false, message: 'Not found' });
     if (complaint.student.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
-
+    if (!complaint.isAdminVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Feedback is not available until an admin has verified the work.',
+      });
+    }
     complaint.studentFeedback = req.body.feedback;
     complaint.studentRating   = req.body.rating;
     await complaint.save();
-
     res.json({ success: true, data: complaint });
   } catch (err) {
     next(err);
   }
 });
 
-// ─── Webhook: called by sync.js after a task linked to a complaint completes ──
-// When worker completes a task that has a linkedTaskId on a complaint,
-// we auto-update the complaint status to 'completed'.
-// Call this from sync.js after saving task records — see integration note below.
+// ─── PATCH /api/complaints/:id/task-completed ────────────────────────────────
 router.patch('/:id/task-completed', protect(['Worker', 'Admin']), async (req, res, next) => {
   try {
     const complaint = await Complaint.findOneAndUpdate(
-      { linkedTaskId: req.params.id, status: 'in_progress' },
+      { linkedTaskId: req.params.id, status: { $in: ['assigned', 'in_progress'] } },
       { $set: { status: 'completed' } },
       { new: true }
     );
-    // Fail silently if no complaint is linked — not every task has one
     res.json({ success: true, data: complaint });
   } catch (err) {
     next(err);

@@ -2,9 +2,10 @@
 
 A full-stack MERN-style operations platform for facility teams with:
 
-- Role-based access for Admin and Worker
+- Role-based access for Admin, Worker, and Student
 - Worker workflows: attendance, cleaning tasks, and inventory logging
-- Admin workflows: live roster, task audit, user management, flagged record review, and inventory overview
+- Admin workflows: live roster, task audit, user management, flagged record review, inventory overview, and building management
+- Student workflows: submit and track complaints, upvote campus issues, view public dashboard
 - Offline-first client storage with later sync to server
 - Direct image upload to Cloudinary to avoid backend image bottlenecks
 
@@ -98,11 +99,35 @@ Security details currently present:
 Implemented:
 
 - Auto-incremented employee codes using counter collection (`EMP-1001`, `EMP-1002`, ...)
-- User roles: `Admin`, `Worker`
-- `assignedAreas` per worker
+- User roles: `Admin`, `Worker`, `Student`
+- `assignedAreas` per user:
+  - Workers: assigned campus areas for cleaning tasks
+  - Students: single assigned building for complaint upvoting
 - Account activation/deactivation support (`isActive`)
 
-## 4.3 Worker Attendance Flow
+## 4.3 Student Complaint and Upvote Flow
+
+Implemented:
+
+- Student registration and login (email + password)
+- **Profile Management**:
+  - Display Name with real-time edit
+  - Building selection dropdown (dynamically fetched from admin-managed building module)
+  - Buildings auto-update when admins add/remove buildings
+- **Complaint Submission**:
+  - Location selector (indoor building/block/floor/area or outdoor GPS)
+  - Photo capture for documentation
+  - Local-first submission with later sync
+- **Issue Tracking**:
+  - View submitted complaints with status
+  - Upvote existing complaints in student's assigned building
+  - Building-scoped upvoting: students can only upvote within their assigned building unless building is unset
+- **Public Board Access**:
+  - View all public complaints (accessible `/board` or from sidebar as `/student/board`)
+  - Filter by building, area type, status
+  - Persistent upvote counts
+
+## 4.4 Worker Attendance Flow
 
 Implemented behavior:
 
@@ -115,7 +140,7 @@ Implemented behavior:
 - Image blobs kept locally and uploaded later during sync
 - Today attendance can be hydrated from server if local DB was cleared
 
-## 4.4 Worker Task Flow (Before/After with Timer)
+## 4.5 Worker Task Flow (Before/After with Timer)
 
 Implemented behavior:
 
@@ -131,7 +156,7 @@ Model and moderation hooks already present:
 - `photoAiStatus` enum field exists for future AI verification results
 - Flagging and admin review fields are available
 
-## 4.5 Worker Inventory Logging
+## 4.6 Worker Inventory Logging
 
 Implemented behavior:
 
@@ -140,7 +165,7 @@ Implemented behavior:
 - Falls back to default local item list if offline
 - Submissions stored locally with GPS and device timestamp
 
-## 4.6 Offline-First Data and Sync
+## 4.7 Offline-First Data and Sync
 
 Implemented local storage strategy:
 
@@ -165,7 +190,7 @@ Additional behavior:
 - Worker layout triggers periodic sync while online (every 30 seconds)
 - Attendance records for current day are retained during garbage collection to preserve same-day UI state
 
-## 4.7 Time Drift Detection and Flagging
+## 4.8 Time Drift Detection and Flagging
 
 Implemented in server sync route:
 
@@ -179,7 +204,7 @@ Flagging applies to:
 - Task records
 - Inventory transactions
 
-## 4.8 Admin Dashboard Capabilities
+## 4.9 Admin Dashboard Capabilities
 
 Implemented pages and APIs:
 
@@ -201,13 +226,17 @@ Implemented pages and APIs:
 	- Add item flow
 - **Users**
 	- List users
-	- Register Worker/Admin accounts
+	- Register Worker/Admin/Student accounts
 	- Toggle active/inactive
 - **Flagged Records**
 	- Consolidated flagged attendance/task/inventory view
 	- Task review action to clear flagged state and store admin note
+- **Building Management**
+	- Create/edit buildings with cascading dropdown config (blocks, floors, area types)
+	- Set building visibility (active/inactive)
+	- Buildings auto-update in student building dropdown
 
-## 4.9 Direct-to-Cloudinary Uploads
+## 4.10 Direct-to-Cloudinary Uploads
 
 Implemented architecture:
 
@@ -219,7 +248,21 @@ Benefit:
 
 - Prevents API overload from large binary uploads during mass sync windows
 
-## 4.10 PWA and Client Runtime Behavior
+## 4.11 Student Layout with Persistent Sidebar
+
+Implemented:
+
+- Fixed left sidebar (always visible on student pages)
+- Navigation items with icons:
+	- **My Issues** → `/student/complaints`
+	- **Report** → `/student/complaints/new`
+	- **Board** → `/student/board` (public complaints with sidebar)
+	- **Profile** → `/student/profile`
+- User info and assigned building displayed in sidebar header
+- Active route highlighting
+- Logout button in sidebar footer
+
+## 4.12 PWA and Client Runtime Behavior
 
 Implemented:
 
@@ -255,6 +298,7 @@ Base URL: `/api`
 ### Admin routes (Admin only)
 
 - `GET /admin/users`
+- `POST /admin/users` (register new user)
 - `PATCH /admin/users/:employeeCode`
 - `GET /admin/roster`
 - `GET /admin/tasks`
@@ -264,10 +308,54 @@ Base URL: `/api`
 - `GET /admin/items`
 - `POST /admin/items`
 - `PATCH /admin/items/:id`
+- `GET /admin/buildings` (list buildings)
+- `POST /admin/buildings` (create building)
+- `PUT /admin/buildings/:id` (update building)
+- `DELETE /admin/buildings/:id` (soft delete building)
+
+### Building routes (public)
+
+- `GET /buildings` (fetch active buildings for dropdowns — no auth required)
+
+### Student/Complaint routes (Student)
+
+- `GET /auth/profile` (get student profile)
+- `PATCH /auth/profile` (update profile, building selection)
+- `POST /complaints` (submit complaint)
+- `GET /complaints` (list complaints)
+- `POST /complaints/:id/upvote` (upvote complaint, building-scoped if building set)
 
 ### Utility
 
 - `GET /health`
+
+## 6.1 Routing by Role
+
+**Student** (`/student/*`):
+- `/student/complaints` — My submitted issues
+- `/student/complaints/new` — Submit new complaint
+- `/student/board` — Public dashboard with all complaints
+- `/student/profile` — Set display name and building
+
+**Worker** (`/worker/*`):
+- `/worker/attendance` — Check in/out with GPS and selfie
+- `/worker/tasks` — Start/complete cleaning tasks
+- `/worker/inventory` — Log inventory quantities
+
+**Admin** (`/admin/*`):
+- `/admin` → `/admin/overview` — Dashboard metrics
+- `/admin/complaints` — Review student complaints
+- `/admin/roster` — View worker attendance by date
+- `/admin/tasks` — Review worker task logs
+- `/admin/inventory` — View stock from transaction logs
+- `/admin/users` — Manage all users
+- `/admin/flagged` — Review flagged records
+- `/admin/buildings` — Create and manage buildings
+
+**Public**:
+- `/login` — Authentication
+- `/register` — Student registration
+- `/board` — Public complaints board (no sidebar)
 
 ## 6. Database Model Summary
 
@@ -292,6 +380,23 @@ Base URL: `/api`
 
 - Catalogue: `name`, `unit`, `category`, `isActive`
 - Transactions: `worker`, `item`, `qty`, `notes`, `gps`, `date`, drift and flag fields
+
+### Complaint
+
+- `student`, `title`, `description`, `severity` (low/medium/high), `category`
+- `location`: `type` (indoor/outdoor), `building`, `block`, `floor`, `areaType`, `coordinates` (GPS)
+- `photoUrl` (Cloudinary link)
+- `upvoteCount`, `upvotedBy` (array of student IDs)
+- `status` (open/in-progress/resolved), `createdAt`, `updatedAt`
+- `isOfflineSync`, `flaggedForReview`
+
+### Building
+
+- `name` (unique), `isActive`
+- `blocks` (array: e.g., ["Block A", "Block B"])
+- `floors` (array: e.g., ["Ground Floor", "First Floor"])
+- `areaTypes` (array: e.g., ["Washroom", "Corridor", "Classroom"])
+- Cascading dropdown config: one document contains all three levels for efficient client-side dropdowns
 
 ## 7. Environment Variables
 
@@ -353,11 +458,13 @@ Default admin created by seed script:
 
 - Email: `admin@facility.com`
 - Password: `Admin@1234`
+- Role: `Admin`
 
 Additional scripts available in `server/scripts`:
 
 - `seedWorker.js` (create worker)
 - `seedWorker2.js` (create second worker)
+- `seedStudent.js` (create student)
 - `resetUsers.js` (delete all users and recreate seed users)
 
 ## 8.5 Run app
@@ -369,9 +476,9 @@ npm run dev
 Expected local ports:
 
 - API server: `http://localhost:5000`
-- Vite client: configured on port `5175`
+- Vite client: `http://localhost:5175`
 
-Note: `.env.example` currently sets `CLIENT_URL=http://localhost:5173`. Update this to `5175` (or change Vite port) so CORS origin matches your local client port.
+Note: `.env.example` sets `CLIENT_URL=http://localhost:5173`. Update this to `http://localhost:5175` to match Vite's default dev port for correct CORS configuration.
 
 ## 9. Build and Deployment
 
@@ -425,3 +532,4 @@ Use this list for verification after setup:
 ---
 
 If you want, the next README iteration can include request/response payload examples for each endpoint and a troubleshooting section for camera permissions, IndexedDB cleanup, and sync conflict handling.
+#

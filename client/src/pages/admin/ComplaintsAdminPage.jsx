@@ -1,5 +1,6 @@
 // pages/admin/ComplaintsAdminPage.jsx
-// Admin views all complaints, assigns them to workers, verifies completed ones.
+// Task 5: Updated CATEGORY_LABELS to cleaning-only types.
+// Task 2: Shows isAdminVerified status — verify button now sets isAdminVerified=true server-side.
 
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
@@ -13,10 +14,68 @@ const STATUS_CONFIG = {
     reopened:    { label: 'Reopened',    className: 'bg-red-500/20 text-red-400',       dot: 'bg-red-400 animate-pulse' },
 };
 
+// Task 5: cleaning-only category labels
 const CATEGORY_LABELS = {
-    cleaning: 'Cleaning', garbage: 'Garbage',
-    water: 'Water', electrical: 'Electrical', other: 'Other',
+    sweeping:         'Sweeping',
+    mopping:          'Mopping',
+    washroom:         'Washroom',
+    garbage:          'Garbage',
+    general_cleaning: 'General Cleaning',
 };
+
+function BeforeAfterSlider({ beforeSrc, afterSrc }) {
+    const [position, setPosition] = useState(50);
+
+    return (
+        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-2">
+            <div className="flex items-center justify-between mb-2">
+                <p className="text-slate-400 text-[11px] uppercase tracking-wide">Worker Cleanup Comparison</p>
+                <p className="text-slate-500 text-[11px]">Drag slider</p>
+            </div>
+
+            <div className="relative w-full h-56 rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
+                <img
+                    src={afterSrc}
+                    alt="Worker after"
+                    className="absolute inset-0 w-full h-full object-cover"
+                />
+
+                <div
+                    className="absolute inset-0"
+                    style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
+                >
+                    <img
+                        src={beforeSrc}
+                        alt="Worker before"
+                        className="w-full h-full object-cover"
+                    />
+                </div>
+
+                <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-white/90"
+                    style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                />
+                <div
+                    className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border-2 border-white bg-slate-900"
+                    style={{ left: `${position}%`, transform: 'translate(-50%, -50%)' }}
+                />
+
+                <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px]">Before</span>
+                <span className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-white text-[10px]">After</span>
+            </div>
+
+            <input
+                type="range"
+                min="0"
+                max="100"
+                value={position}
+                onChange={(e) => setPosition(Number(e.target.value))}
+                className="w-full mt-3 accent-blue-500"
+                aria-label="Compare before and after photos"
+            />
+        </div>
+    );
+}
 
 export default function ComplaintsAdminPage() {
     const [complaints, setComplaints] = useState([]);
@@ -61,50 +120,79 @@ export default function ComplaintsAdminPage() {
             await api.patch(`/api/complaints/${complaintId}/assign`, { workerId });
             await load();
             setExpanded(null);
-        } catch (err) { console.error('[assign]', err); }
-        finally { setActionLoading(null); }
+        } catch (err) {
+            console.error('[assign]', err);
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     const handleVerify = async (complaintId) => {
         setActionLoading(complaintId + '-verify');
         try {
+            // Task 2: /verify now also sets isAdminVerified=true server-side (no change needed here)
             await api.patch(`/api/complaints/${complaintId}/verify`, { note: verifyNote });
             await load();
             setExpanded(null);
             setVerifyNote('');
-        } catch (err) { console.error('[verify]', err); }
-        finally { setActionLoading(null); }
+        } catch (err) {
+            console.error('[verify]', err);
+        } finally {
+            setActionLoading(null);
+        }
     };
 
-    const counts = complaints.reduce((acc, c) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc; }, {});
+    const counts = complaints.reduce((acc, c) => {
+        acc[c.status] = (acc[c.status] || 0) + 1;
+        return acc;
+    }, {});
 
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-2xl font-bold text-white">Complaints</h1>
-                <p className="text-slate-400 text-sm mt-1">Assign, track, and verify campus issue reports</p>
+                <p className="text-slate-400 text-sm mt-1">Assign, track, and verify cleaning issue reports</p>
             </div>
 
             {/* Status summary bar */}
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                    <button key={key} onClick={() => setFilters((f) => ({ ...f, status: f.status === key ? '' : key }))}
-                        className={`rounded-xl p-3 text-center transition-all border ${filters.status === key ? 'border-slate-600 bg-slate-800' : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'}`}>
+                    <button
+                        key={key}
+                        onClick={() => setFilters((f) => ({ ...f, status: f.status === key ? '' : key }))}
+                        className={`rounded-xl p-3 text-center transition-all border ${
+                            filters.status === key
+                                ? 'border-slate-600 bg-slate-800'
+                                : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
+                        }`}
+                    >
                         <p className="text-lg font-bold text-white">{counts[key] || 0}</p>
                         <p className={`text-xs font-medium mt-0.5 ${cfg.className.split(' ')[1]}`}>{cfg.label}</p>
                     </button>
                 ))}
             </div>
 
-            {/* Filters */}
+            {/* Filters — Task 5: category dropdown now shows cleaning types only */}
             <div className="flex gap-3 flex-wrap">
-                <select value={filters.status} onChange={setFilter('status')} className="px-3 py-2 bg-slate-800/60 border border-slate-700 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select
+                    value={filters.status}
+                    onChange={setFilter('status')}
+                    className="px-3 py-2 bg-slate-800/60 border border-slate-700 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
                     <option value="">All statuses</option>
-                    {Object.entries(STATUS_CONFIG).map(([v, { label }]) => (<option key={v} value={v}>{label}</option>))}
+                    {Object.entries(STATUS_CONFIG).map(([v, { label }]) => (
+                        <option key={v} value={v}>{label}</option>
+                    ))}
                 </select>
-                <select value={filters.category} onChange={setFilter('category')} className="px-3 py-2 bg-slate-800/60 border border-slate-700 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">All categories</option>
-                    {Object.entries(CATEGORY_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}
+                <select
+                    value={filters.category}
+                    onChange={setFilter('category')}
+                    className="px-3 py-2 bg-slate-800/60 border border-slate-700 rounded-xl text-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="">All types</option>
+                    {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
+                        <option key={v} value={v}>{l}</option>
+                    ))}
                 </select>
             </div>
 
@@ -127,37 +215,127 @@ export default function ComplaintsAdminPage() {
                         const isExpanded = expanded === c._id;
                         const isAssigning = actionLoading === c._id + '-assign';
                         const isVerifying = actionLoading === c._id + '-verify';
+                        const linkedTask = c.linkedTaskId && typeof c.linkedTaskId === 'object' ? c.linkedTaskId : null;
+                        const hasWorkerEvidence = Boolean(linkedTask?.beforePhotoUrl && linkedTask?.afterPhotoUrl);
+
                         return (
                             <div key={c._id} className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-all">
-                                <button className="w-full text-left p-4 flex items-start justify-between gap-3" onClick={() => setExpanded(isExpanded ? null : c._id)}>
+                                <button
+                                    className="w-full text-left p-4 flex items-start justify-between gap-3"
+                                    onClick={() => setExpanded(isExpanded ? null : c._id)}
+                                >
                                     <div className="flex-1 min-w-0 space-y-1">
                                         <div className="flex items-center gap-2">
                                             <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
-                                            <p className="text-white font-medium text-sm capitalize">{CATEGORY_LABELS[c.category] || c.category}</p>
-                                            {c.upvoteCount > 0 && (<span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-md">▲ {c.upvoteCount}</span>)}
+                                            <p className="text-white font-medium text-sm capitalize">
+                                                {CATEGORY_LABELS[c.category] || c.category}
+                                            </p>
+                                            {c.upvoteCount > 0 && (
+                                                <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-md">
+                                                    ▲ {c.upvoteCount}
+                                                </span>
+                                            )}
+                                            {/* Task 2: show verification badge */}
+                                            {c.isAdminVerified && (
+                                                <span className="px-1.5 py-0.5 bg-teal-500/20 text-teal-400 text-xs rounded-md">
+                                                    ✓ Verified
+                                                </span>
+                                            )}
                                         </div>
                                         {c.indoorLocation?.building ? (
-                                            <p className="text-slate-500 text-xs">{c.indoorLocation.building}{c.indoorLocation.area ? ` — ${c.indoorLocation.area}` : ''}</p>
+                                            <p className="text-slate-500 text-xs">
+                                                {c.indoorLocation.building}
+                                                {c.indoorLocation.area ? ` — ${c.indoorLocation.area}` : ''}
+                                            </p>
                                         ) : c.gps?.latitude ? (
-                                            <p className="text-slate-500 text-xs">GPS: {c.gps.latitude.toFixed(4)}, {c.gps.longitude.toFixed(4)}</p>
+                                            <p className="text-slate-500 text-xs">
+                                                GPS: {c.gps.latitude.toFixed(4)}, {c.gps.longitude.toFixed(4)}
+                                            </p>
                                         ) : null}
-                                        <p className="text-slate-600 text-xs">{c.student?.name || 'Unknown student'} · {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                                        <p className="text-slate-600 text-xs">
+                                            {c.student?.name || 'Unknown student'} ·{' '}
+                                            {new Date(c.createdAt).toLocaleDateString('en-IN', {
+                                                day: 'numeric', month: 'short',
+                                            })}
+                                        </p>
                                     </div>
                                     <div className="flex flex-col items-end gap-2 shrink-0">
-                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${cfg.className}`}>{cfg.label}</span>
-                                        <svg className={`w-4 h-4 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${cfg.className}`}>
+                                            {cfg.label}
+                                        </span>
+                                        <svg
+                                            className={`w-4 h-4 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                        >
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </div>
                                 </button>
+
                                 {isExpanded && (
                                     <div className="border-t border-slate-800 p-4 space-y-4">
-                                        {c.photoUrl && (<img src={c.photoUrl} alt="Complaint" className="w-full rounded-xl border border-slate-700 max-h-60 object-cover" />)}
-                                        {c.description && (<p className="text-slate-300 text-sm bg-slate-800/40 rounded-xl p-3">{c.description}</p>)}
+                                        <div className={`grid grid-cols-1 ${hasWorkerEvidence ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-3`}>
+                                            <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-2">
+                                                <p className="text-slate-400 text-[11px] mb-2 uppercase tracking-wide">Student Complaint Photo</p>
+                                                {c.photoUrl ? (
+                                                    <img src={c.photoUrl} alt="Student complaint" className="w-full rounded-lg border border-slate-700 max-h-56 object-cover" />
+                                                ) : (
+                                                    <div className="h-40 rounded-lg border border-dashed border-slate-700 flex items-center justify-center text-slate-500 text-xs">
+                                                        No student photo
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {hasWorkerEvidence ? (
+                                                <BeforeAfterSlider
+                                                    beforeSrc={linkedTask.beforePhotoUrl}
+                                                    afterSrc={linkedTask.afterPhotoUrl}
+                                                />
+                                            ) : (
+                                                <>
+                                                    <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-2">
+                                                        <p className="text-slate-400 text-[11px] mb-2 uppercase tracking-wide">Worker Before Photo</p>
+                                                        {linkedTask?.beforePhotoUrl ? (
+                                                            <img src={linkedTask.beforePhotoUrl} alt="Worker before" className="w-full rounded-lg border border-slate-700 max-h-56 object-cover" />
+                                                        ) : (
+                                                            <div className="h-40 rounded-lg border border-dashed border-slate-700 flex items-center justify-center text-slate-500 text-xs">
+                                                                No before photo yet
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-2">
+                                                        <p className="text-slate-400 text-[11px] mb-2 uppercase tracking-wide">Worker After Photo</p>
+                                                        {linkedTask?.afterPhotoUrl ? (
+                                                            <img src={linkedTask.afterPhotoUrl} alt="Worker after" className="w-full rounded-lg border border-slate-700 max-h-56 object-cover" />
+                                                        ) : (
+                                                            <div className="h-40 rounded-lg border border-dashed border-slate-700 flex items-center justify-center text-slate-500 text-xs">
+                                                                No after photo yet
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                        {linkedTask && (
+                                            <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                                                <span className="text-slate-400 text-xs">Task Evidence:</span>
+                                                <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-md">{linkedTask.area || 'Area not set'}</span>
+                                                <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-md">Status: {linkedTask.status || 'N/A'}</span>
+                                                {linkedTask.photoAiStatus && linkedTask.photoAiStatus !== 'unchecked' && (
+                                                    <span className="px-2 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-md">AI: {linkedTask.photoAiStatus}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                        {c.description && (
+                                            <p className="text-slate-300 text-sm bg-slate-800/40 rounded-xl p-3">{c.description}</p>
+                                        )}
                                         {c.studentFeedback && (
                                             <div className="bg-slate-800/40 rounded-xl p-3 space-y-1">
                                                 <p className="text-slate-500 text-xs">Student feedback</p>
-                                                <div className="flex gap-0.5">{[1,2,3,4,5].map((r) => (<span key={r} className={`text-sm ${r <= c.studentRating ? 'text-amber-400' : 'text-slate-700'}`}>★</span>))}</div>
+                                                <div className="flex gap-0.5">
+                                                    {[1,2,3,4,5].map((r) => (
+                                                        <span key={r} className={`text-sm ${r <= c.studentRating ? 'text-amber-400' : 'text-slate-700'}`}>★</span>
+                                                    ))}
+                                                </div>
                                                 <p className="text-slate-300 text-sm">{c.studentFeedback}</p>
                                             </div>
                                         )}
@@ -169,7 +347,9 @@ export default function ComplaintsAdminPage() {
                                         )}
                                         {c.assignedTo && (
                                             <div className="flex items-center gap-3 bg-slate-800/40 rounded-xl p-3">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-slate-300 text-xs font-bold shrink-0">{c.assignedTo.name?.[0] || 'W'}</div>
+                                                <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-slate-300 text-xs font-bold shrink-0">
+                                                    {c.assignedTo.name?.[0] || 'W'}
+                                                </div>
                                                 <div>
                                                     <p className="text-slate-400 text-xs">Assigned to</p>
                                                     <p className="text-white text-sm font-medium">{c.assignedTo.name}</p>
@@ -177,28 +357,70 @@ export default function ComplaintsAdminPage() {
                                                 </div>
                                             </div>
                                         )}
-                                        {(c.status === 'submitted' || c.status === 'reopened') && (
+                                        {['submitted', 'reopened', 'assigned', 'in_progress'].includes(c.status) && (
                                             <div className="space-y-2">
-                                                <p className="text-slate-400 text-xs font-medium">Assign to worker</p>
-                                                <select value={assigningTo[c._id] || ''} onChange={(e) => setAssigningTo((prev) => ({ ...prev, [c._id]: e.target.value }))} className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                <p className="text-slate-400 text-xs font-medium">
+                                                    {c.assignedTo ? 'Reassign to another worker' : 'Assign to worker'}
+                                                </p>
+                                                <select
+                                                    value={assigningTo[c._id] || ''}
+                                                    onChange={(e) => setAssigningTo((prev) => ({ ...prev, [c._id]: e.target.value }))}
+                                                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
                                                     <option value="">Select a worker</option>
-                                                    {workers.map((w) => (<option key={w._id} value={w._id}>{w.name} ({w.employeeCode}){w.assignedAreas?.length ? ` — ${w.assignedAreas.slice(0, 2).join(', ')}` : ''}</option>))}
+                                                    {workers.map((w) => (
+                                                        <option key={w._id} value={w._id}>
+                                                            {w.name} ({w.employeeCode})
+                                                            {w.assignedAreas?.length ? ` — ${w.assignedAreas.slice(0, 2).join(', ')}` : ''}
+                                                        </option>
+                                                    ))}
                                                 </select>
-                                                <button onClick={() => handleAssign(c._id)} disabled={!assigningTo[c._id] || isAssigning} className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-all hover:scale-[1.02]">
-                                                    {isAssigning ? 'Assigning...' : 'Assign Task'}
+                                                <button
+                                                    onClick={() => handleAssign(c._id)}
+                                                    disabled={!assigningTo[c._id] || isAssigning}
+                                                    className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-all hover:scale-[1.02]"
+                                                >
+                                                    {isAssigning ? 'Saving...' : (c.assignedTo ? 'Reassign Task' : 'Assign Task')}
                                                 </button>
                                             </div>
                                         )}
+                                        {/* Task 2: verify button — sets isAdminVerified=true and unlocks student feedback */}
                                         {c.status === 'completed' && (
                                             <div className="space-y-2">
-                                                <p className="text-slate-400 text-xs font-medium">Verify completion</p>
-                                                <input type="text" value={verifyNote} onChange={(e) => setVerifyNote(e.target.value)} placeholder="Optional note for student..." className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                                                <button onClick={() => handleVerify(c._id)} disabled={isVerifying} className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-all hover:scale-[1.02]">
+                                                <p className="text-slate-400 text-xs font-medium">
+                                                    Verify completion
+                                                    {!c.isAdminVerified && (
+                                                        <span className="ml-2 text-amber-400 text-xs">
+                                                            — student feedback unlocks after this
+                                                        </span>
+                                                    )}
+                                                </p>
+                                                {!hasWorkerEvidence && (
+                                                    <p className="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                                                        Worker before/after photos are required before admin verification.
+                                                    </p>
+                                                )}
+                                                <input
+                                                    type="text"
+                                                    value={verifyNote}
+                                                    onChange={(e) => setVerifyNote(e.target.value)}
+                                                    placeholder="Optional note for student..."
+                                                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                                />
+                                                <button
+                                                    onClick={() => handleVerify(c._id)}
+                                                    disabled={isVerifying || !hasWorkerEvidence}
+                                                    className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-all hover:scale-[1.02]"
+                                                >
                                                     {isVerifying ? 'Verifying...' : '✓ Mark as Verified'}
                                                 </button>
                                             </div>
                                         )}
-                                        {c.linkedTaskId && (<p className="text-slate-600 text-xs">Linked task: {typeof c.linkedTaskId === 'object' ? c.linkedTaskId._id : c.linkedTaskId}</p>)}
+                                        {c.linkedTaskId && (
+                                            <p className="text-slate-600 text-xs">
+                                                Linked task: {typeof c.linkedTaskId === 'object' ? c.linkedTaskId._id : c.linkedTaskId}
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                             </div>

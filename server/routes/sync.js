@@ -7,13 +7,8 @@ const { InventoryTx } = require('../models/Item');
 
 const router = express.Router();
 
-// ─── Time-Travel Exploit Detection threshold ──────────────────────────────────
-const DRIFT_THRESHOLD_SECONDS = 5 * 60; // flag if device time differs from server time by > 5 min
+const DRIFT_THRESHOLD_SECONDS = 5 * 60;
 
-/**
- * Calculates absolute drift in seconds between a device-reported timestamp
- * and the server receipt time, and flags the record if it exceeds the threshold.
- */
 function evaluateDrift(deviceTimestamp) {
   if (!deviceTimestamp) return { timeDriftSeconds: null, flaggedForReview: false };
   const serverNow = Date.now();
@@ -26,23 +21,6 @@ function evaluateDrift(deviceTimestamp) {
 }
 
 // ─── POST /api/sync ───────────────────────────────────────────────────────────
-/**
- * Bulk offline sync endpoint.
- * 
- * Workers queue records in IndexedDB while offline. When connectivity returns,
- * the SW Background Sync fires and this endpoint receives all queued JSON records.
- * Images are already uploaded to Cloudinary by this point — only URLs arrive here.
- *
- * Body: {
- *   attendance?: AttendanceRecord[],
- *   tasks?:      TaskRecord[],
- *   inventory?:  InventoryTxRecord[],
- * }
- *
- * Each record must include a `deviceTimestamp` field (ISO string) for drift check.
- *
- * Returns: { success, saved: { attendance, tasks, inventory }, flagged: number }
- */
 router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
   try {
     const workerId = req.user._id;
@@ -56,7 +34,6 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
         const drift = evaluateDrift(record.deviceTimestamp);
         if (drift.flaggedForReview) totalFlagged++;
 
-        // Stamp serverTime on each event for audit trail
         const stampServerTime = (stamp) =>
           stamp ? { ...stamp, serverTime: serverNow } : undefined;
 
@@ -80,20 +57,53 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
           );
           results.attendance++;
         } catch (e) {
-          // Log but don't abort the entire batch
           console.error('[sync] attendance record error:', e.message, record);
         }
       }
     }
 
     // ── 2. Task Records ───────────────────────────────────────────────────────
-    if (Array.isArray(req.body.tasks)) {
+    // Task 1: ADDED — validate worker has checked in today before saving tasks
+    if (Array.isArray(req.body.tasks) && req.body.tasks.length > 0) {
+
+      // Check if worker has a check-in for today on the server
+      const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 10);
+
+      const todayAttendance = await Attendance.findOne({
+        worker: workerId,
+        date:   today,
+        'checkIn.timestamp': { $exists: true },
+      }).lean();
+
+      // If no check-in exists, reject all task records in this batch
+      if (!todayAttendance) {
+        return res.status(400).json({
+          success: false,
+          code:    'CHECKIN_REQUIRED',
+          message: 'You must check in before submitting task records.',
+          saved:   results,
+          flagged: totalFlagged,
+        });
+      }
+
+      // Worker has checked out for the day — also block new task records
+      if (todayAttendance.checkOut?.timestamp) {
+        return res.status(400).json({
+          success: false,
+          code:    'SHIFT_ENDED',
+          message: 'Your shift has ended (checked out). New tasks cannot be submitted.',
+          saved:   results,
+          flagged: totalFlagged,
+        });
+      }
+
       for (const record of req.body.tasks) {
         const drift = evaluateDrift(record.deviceTimestamp);
         if (drift.flaggedForReview) totalFlagged++;
 
         try {
-          // Match by serverId if it exists (for pre-assigned tasks), else localId, else natural key
           const filter = record.serverId
             ? { _id: record.serverId, worker: workerId }
             : record.localId
@@ -118,13 +128,12 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
                 isOfflineSync:    true,
                 flaggedForReview: drift.flaggedForReview,
                 timeDriftSeconds: drift.timeDriftSeconds,
-                photoAiStatus:   'unchecked', // queued for future AI vision check
+                photoAiStatus:   'unchecked',
               },
             },
             { upsert: true, new: true }
           );
 
-          // Auto-complete any linked complaints
           if (updatedTask && updatedTask.status === 'completed') {
             await Complaint.findOneAndUpdate(
               { linkedTaskId: updatedTask._id, status: { $in: ['assigned', 'in_progress'] } },
@@ -144,7 +153,6 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
       for (const record of req.body.inventory) {
         const drift = evaluateDrift(record.deviceTimestamp);
         if (drift.flaggedForReview) totalFlagged++;
-
         try {
           await InventoryTx.create({
             worker:           workerId,
@@ -178,10 +186,11 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
 });
 
 // ─── GET /api/sync/pull ───────────────────────────────────────────────────────
-// Worker pulls tasks assigned by supervisors/admins for today.
 router.get('/pull', protect(['Worker']), async (req, res, next) => {
   try {
-    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
     const tasks = await Task.find({ worker: req.user._id, date: today }).lean();
     res.json({ success: true, tasks });
   } catch (err) {

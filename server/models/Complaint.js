@@ -1,18 +1,27 @@
-const mongoose = require('mongoose');
-
-// ─── Complaint Model ──────────────────────────────────────────────────────────
-// Integrates with existing Task model via linkedTaskId.
-// When admin assigns a complaint to a worker, a Task doc is auto-created
-// and stored in linkedTaskId — so the worker uses the existing TasksPage flow.
+// server/models/Complaint.js — UPDATED
+// Task 5: replaced the flat indoorLocation sub-doc with the new structured
+//         location fields that match the Building schema's cascading arrays.
 //
-// Follows the same patterns as Task.js:
-//   - flaggedForReview, timeDriftSeconds, reviewNote for admin audit
-//   - date: 'YYYY-MM-DD' for easy daily grouping
-//   - gps sub-schema matching Task.beforeGps / afterGps shape
+// BEFORE (old shape):
+//   indoorLocation: { building: String, floor: String, area: String }
+//
+// AFTER (new shape):
+//   location: {
+//     building:   String  (matched to Building.name)
+//     block:      String  (from Building.blocks)
+//     floor:      String  (from Building.floors)
+//     areaType:   String  (from Building.areaTypes)
+//     roomNumber: String  (optional free text, e.g. "104")
+//   }
+//
+// Backward compatibility: indoorLocation kept as a legacy alias (sparse)
+// so existing documents don't break. New submissions use location.
+// All other fields unchanged.
+
+const mongoose = require('mongoose');
 
 const complaintSchema = new mongoose.Schema(
   {
-    // ── Submitted by (Student role) ───────────────────────────────────────────
     student: {
       type:     mongoose.Schema.Types.ObjectId,
       ref:      'User',
@@ -20,11 +29,10 @@ const complaintSchema = new mongoose.Schema(
       index:    true,
     },
 
-    // ── Category → drives smart routing to correct supervisor ─────────────────
-    // Add more as needed — routing logic lives in complaints.js route
+    // Task 5 enum update matches tasks-update.zip (cleaning-only categories)
     category: {
       type:     String,
-      enum:     ['cleaning', 'water', 'electrical', 'garbage', 'other'],
+      enum:     ['sweeping', 'mopping', 'washroom', 'garbage', 'general_cleaning'],
       required: true,
     },
 
@@ -34,27 +42,35 @@ const complaintSchema = new mongoose.Schema(
       maxlength: 500,
     },
 
-    // ── Photo proof (Cloudinary URL — same upload flow as task photos) ─────────
     photoUrl: { type: String, default: null },
 
-    // ── Location ──────────────────────────────────────────────────────────────
-    // GPS (outdoor / where available)
+    // ── GPS (outdoor / where available) ──────────────────────────────────────
     gps: {
       latitude:  { type: Number },
       longitude: { type: Number },
     },
 
-    // Indoor structured location — for when GPS fails inside buildings
-    // Worker selects: Building → Floor → Area from dropdowns in UI
-    indoorLocation: {
-      building: { type: String, trim: true },  // e.g. "Library Block"
-      floor:    { type: String, trim: true },  // e.g. "Ground Floor"
-      area:     { type: String, trim: true },  // e.g. "Men's Washroom"
+    // ── Task 5: Structured indoor location ───────────────────────────────────
+    // Replaces the old flat indoorLocation sub-doc.
+    // Each field maps to one dropdown level in the Building schema.
+    location: {
+      building:   { type: String, trim: true },   // Building.name
+      block:      { type: String, trim: true },   // Building.blocks[i]
+      floor:      { type: String, trim: true },   // Building.floors[i]
+      areaType:   { type: String, trim: true },   // Building.areaTypes[i]
+      roomNumber: { type: String, trim: true },   // free text, e.g. "104" (optional)
     },
 
-    // ── Full lifecycle status ─────────────────────────────────────────────────
-    // submitted → assigned → in_progress → completed → verified
-    // Student can reopen 'verified' → 'reopened' if unsatisfied
+    // ── Legacy field — kept for backward compatibility with old documents ─────
+    // New submissions will NOT use this; the complaints route writes to location.
+    // Old documents that have indoorLocation will still display correctly
+    // because the frontend checks both fields.
+    indoorLocation: {
+      building: { type: String, trim: true },
+      floor:    { type: String, trim: true },
+      area:     { type: String, trim: true },
+    },
+
     status: {
       type:    String,
       enum:    ['submitted', 'assigned', 'in_progress', 'completed', 'verified', 'reopened'],
@@ -62,57 +78,50 @@ const complaintSchema = new mongoose.Schema(
       index:   true,
     },
 
-    // ── Assignment ────────────────────────────────────────────────────────────
     assignedTo: {
       type:    mongoose.Schema.Types.ObjectId,
-      ref:     'User',   // Worker
+      ref:     'User',
       default: null,
     },
     assignedBy: {
       type:    mongoose.Schema.Types.ObjectId,
-      ref:     'User',   // Admin / Supervisor
+      ref:     'User',
       default: null,
     },
     assignedAt: { type: Date, default: null },
 
-    // ── Linked Task ───────────────────────────────────────────────────────────
-    // Created automatically when admin assigns this complaint to a worker.
-    // The worker then resolves it via the existing TasksPage flow (before/after
-    // photo + timer). No separate UI needed on the worker side.
     linkedTaskId: {
       type:    mongoose.Schema.Types.ObjectId,
       ref:     'Task',
       default: null,
     },
 
-    // ── Duplicate / upvote system ─────────────────────────────────────────────
-    // If this is a duplicate, it points to the original complaint.
-    // Students upvote the original instead of creating a new one.
     parentComplaintId: {
       type:    mongoose.Schema.Types.ObjectId,
       ref:     'Complaint',
       default: null,
     },
     upvoteCount: { type: Number, default: 0 },
-    upvotedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    upvotedBy:   [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
-    // ── Student feedback after resolution ────────────────────────────────────
-    studentFeedback:  { type: String, trim: true },
-    studentRating:    { type: Number, min: 1, max: 5 },
-    reopenReason:     { type: String, trim: true },
+    // Task 2: isAdminVerified gates student feedback
+    isAdminVerified: { type: Boolean, default: false },
 
-    // ── Admin review ──────────────────────────────────────────────────────────
-    // Same pattern as Task.reviewNote
+    studentFeedback: { type: String, trim: true },
+    studentRating:   { type: Number, min: 1, max: 5 },
+    reopenReason:    { type: String, trim: true },
+
     flaggedForReview: { type: Boolean, default: false },
     reviewNote:       { type: String },
 
-    date: { type: String, index: true }, // YYYY-MM-DD of submission
+    date: { type: String, index: true },
   },
   { timestamps: true }
 );
 
-// Geospatial index for duplicate detection (50m radius query)
 complaintSchema.index({ 'gps.latitude': 1, 'gps.longitude': 1 });
 complaintSchema.index({ category: 1, status: 1, date: 1 });
+// Task 5: index on building for fast building-scoped queries
+complaintSchema.index({ 'location.building': 1 });
 
 module.exports = mongoose.model('Complaint', complaintSchema);

@@ -1,3 +1,8 @@
+// server/server.js — UPDATED
+// Changes from original:
+//   1. Added buildingRoutes (public + admin) mounting
+//   2. Everything else identical
+
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const express = require('express');
 const mongoose = require('mongoose');
@@ -6,11 +11,13 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 
-const authRoutes = require('./routes/auth');
+const authRoutes      = require('./routes/auth');
 const cloudinaryRoutes = require('./routes/cloudinary');
-const syncRoutes = require('./routes/sync');
-const adminRoutes = require('./routes/admin');
+const syncRoutes      = require('./routes/sync');
+const adminRoutes     = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
+// Task 2: building routes — two routers from one file
+const { publicRouter: buildingPublicRoutes, adminRouter: buildingAdminRoutes } = require('./routes/buildingRoutes');
 
 const app = express();
 
@@ -21,11 +28,10 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
-app.use(express.json({ limit: '2mb' })); // JSON only — images go direct to Cloudinary
+app.use(express.json({ limit: '2mb' }));
 
-// Global rate limiter — tightened on auth routes separately
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
+  windowMs: 15 * 60 * 1000,
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
@@ -33,11 +39,17 @@ const globalLimiter = rateLimit({
 app.use(globalLimiter);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRoutes);
+app.use('/api/auth',       authRoutes);
 app.use('/api/cloudinary', cloudinaryRoutes);
-app.use('/api/sync', syncRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/sync',       syncRoutes);
+app.use('/api/admin',      adminRoutes);
 app.use('/api/complaints', complaintRoutes);
+
+// Task 2: Building management routes
+// Public endpoint — student/worker dropdown (no auth)
+app.use('/api/buildings', buildingPublicRoutes);
+// Admin CRUD — protected inside the router with protect(['Admin'])
+app.use('/api/admin/buildings', buildingAdminRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
 
