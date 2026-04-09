@@ -58,6 +58,7 @@ function App() {
                     <Route path="/worker" element={<ProtectedRoute roles={['Worker']}><WorkerLayout /></ProtectedRoute>}>
                         <Route index element={<Navigate to="attendance" replace />} />
                         <Route path="attendance" element={<WorkerAttendancePage />} />
+                        <Route path="tasks"      element={<TasksPage />} />
                         <Route path="inventory"  element={<InventoryPage />} />
                     </Route>
 
