@@ -162,7 +162,7 @@ export async function garbageCollect(storeName) {
   let cursor = await store.index('by-synced').openCursor(true);
   while (cursor) {
     if (storeName === STORES.ATTENDANCE) {
-      const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      const today = new Date(Date.now() + 19800000).toISOString().slice(0, 10);
       if (cursor.value.date === today) { cursor = await cursor.continue(); continue; }
     }
     const imgIndex = imageStore.index('by-linked');

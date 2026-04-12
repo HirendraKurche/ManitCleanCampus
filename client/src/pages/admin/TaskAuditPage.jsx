@@ -4,7 +4,7 @@ import api from '../../utils/api';
 export default function TaskAuditPage() {
     const [tasks, setTasks] = useState([]);
     const [users, setUsers] = useState([]);
-    const [date, setDate] = useState(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
+    const [date, setDate] = useState(new Date(Date.now() + 19800000).toISOString().slice(0, 10));
     const [filter, setFilter] = useState('all');
     const [workerFilter, setWorkerFilter] = useState('all');
     const [areaFilter, setAreaFilter] = useState('all');

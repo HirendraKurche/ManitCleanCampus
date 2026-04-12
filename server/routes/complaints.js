@@ -134,7 +134,7 @@ async function autoAssignComplaint(complaint) {
   const worker = await findAutoAssignableWorker(complaint);
   if (!worker) return { assigned: false };
 
-  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+  const today = new Date(Date.now() + 19800000)
     .toISOString()
     .slice(0, 10);
 
@@ -280,7 +280,7 @@ router.post('/', protect(['Student']), async (req, res, next) => {
       });
     }
 
-    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    const today = new Date(Date.now() + 19800000)
       .toISOString()
       .slice(0, 10);
 
@@ -441,7 +441,7 @@ router.patch('/:id/assign', protect(['Admin']), async (req, res, next) => {
 
     const taskArea = buildTaskAreaLabel(complaint, area);
 
-    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    const today = new Date(Date.now() + 19800000)
       .toISOString()
       .slice(0, 10);
 
@@ -451,9 +451,14 @@ router.patch('/:id/assign', protect(['Admin']), async (req, res, next) => {
     }
 
     if (task && task.status !== 'completed') {
+      if (task.worker.toString() !== workerId.toString()) {
+        task.status = 'pending';
+        task.beforePhotoUrl = null;
+        task.afterPhotoUrl = null;
+        task.startedAt = null;
+      }
       task.worker = workerId;
       task.area = taskArea;
-      task.status = 'pending';
       task.date = today;
       await task.save();
     } else {

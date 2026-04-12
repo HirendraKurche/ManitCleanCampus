@@ -67,7 +67,7 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
     if (Array.isArray(req.body.tasks) && req.body.tasks.length > 0) {
 
       // Check if worker has a check-in for today on the server
-      const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+      const today = new Date(Date.now() + 19800000)
         .toISOString()
         .slice(0, 10);
 
@@ -188,7 +188,7 @@ router.post('/', protect(['Worker', 'Admin']), async (req, res, next) => {
 // ─── GET /api/sync/pull ───────────────────────────────────────────────────────
 router.get('/pull', protect(['Worker']), async (req, res, next) => {
   try {
-    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    const today = new Date(Date.now() + 19800000)
       .toISOString()
       .slice(0, 10);
     const tasks = await Task.find({ worker: req.user._id, date: today }).lean();

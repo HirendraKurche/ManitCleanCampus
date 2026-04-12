@@ -20,7 +20,7 @@ router.use(protect(['Admin']));
 // Used by OverviewPage.jsx and the new ComplaintsAdminPage.
 router.get('/overview', async (req, res, next) => {
   try {
-    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    const today = new Date(Date.now() + 19800000)
       .toISOString()
       .slice(0, 10);
 

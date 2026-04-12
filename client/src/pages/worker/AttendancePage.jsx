@@ -13,7 +13,7 @@ const ICONS = {
 };
 
 function todayStr() {
-    return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    return new Date(Date.now() + 19800000).toISOString().slice(0, 10);
 }
 
 export default function AttendancePage() {

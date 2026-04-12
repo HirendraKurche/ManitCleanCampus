@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 
 function todayStr() {
-    return new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    return new Date(Date.now() + 19800000)
         .toISOString()
         .slice(0, 10);
 }

@@ -3,7 +3,7 @@ import api from '../../utils/api';
 
 export default function AttendancePage() {
     const [attendance, setAttendance] = useState([]);
-    const [date, setDate] = useState(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
+    const [date, setDate] = useState(new Date(Date.now() + 19800000).toISOString().slice(0, 10));
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

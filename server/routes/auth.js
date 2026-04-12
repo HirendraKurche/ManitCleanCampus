@@ -149,7 +149,7 @@ router.patch('/profile', protect(), async (req, res, next) => {
 // ─── GET /api/auth/attendance/today ───────────────────────────────────────────
 router.get('/attendance/today', protect(), async (req, res, next) => {
   try {
-    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    const today = new Date(Date.now() + 19800000)
       .toISOString()
       .slice(0, 10);
     const record = await Attendance.findOne({ worker: req.user._id, date: today });

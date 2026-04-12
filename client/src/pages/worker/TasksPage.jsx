@@ -13,7 +13,7 @@ import api from '../../utils/api';
 import { addRecord, updateRecord, getAllRecords, saveImageBlob, STORES } from '../../utils/db';
 
 function todayStr() {
-    return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    return new Date(Date.now() + 19800000).toISOString().slice(0, 10);
 }
 
 function fmtDuration(seconds) {
