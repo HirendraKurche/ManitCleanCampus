@@ -192,7 +192,24 @@ router.get('/pull', protect(['Worker']), async (req, res, next) => {
       .toISOString()
       .slice(0, 10);
     const tasks = await Task.find({ worker: req.user._id, date: today }).lean();
-    res.json({ success: true, tasks });
+
+    // Attach complaint photo URL so workers can see what the student reported
+    const tasksWithPhoto = await Promise.all(
+      tasks.map(async (task) => {
+        const complaint = await Complaint.findOne({ linkedTaskId: task._id })
+          .select('photoUrl description category location indoorLocation')
+          .lean();
+        return {
+          ...task,
+          complaintPhotoUrl:   complaint?.photoUrl   || null,
+          complaintDesc:       complaint?.description || null,
+          complaintCategory:   complaint?.category    || null,
+          complaintLocation:   complaint?.location    || complaint?.indoorLocation || null,
+        };
+      })
+    );
+
+    res.json({ success: true, tasks: tasksWithPhoto });
   } catch (err) {
     next(err);
   }

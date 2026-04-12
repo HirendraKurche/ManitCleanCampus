@@ -12,6 +12,53 @@ const protect = require('../middleware/auth');
 const Complaint = require('../models/Complaint');
 const Task = require('../models/Task');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
+
+// ─── Helper: send notifications to admins + relevant workers ─────────────────
+async function notifyNewComplaint(complaint) {
+  try {
+    const building = complaint.location?.building || complaint.indoorLocation?.building || null;
+
+    // Always notify all active admins
+    const admins = await User.find({ role: 'Admin', isActive: true }).select('_id').lean();
+
+    // Notify workers whose assignedAreas include the complaint building
+    let workerIds = [];
+    if (building) {
+      const norm = (s) => String(s || '').trim().toLowerCase();
+      const workers = await User.find({ role: 'Worker', isActive: true })
+        .select('_id assignedAreas')
+        .lean();
+      workerIds = workers
+        .filter((w) => (w.assignedAreas || []).some((a) => norm(a) === norm(building)))
+        .map((w) => w._id);
+    }
+
+    const recipientIds = [
+      ...admins.map((a) => a._id),
+      ...workerIds,
+    ];
+
+    if (!recipientIds.length) return;
+
+    const location = building
+      ? `in ${building}`
+      : 'on campus';
+
+    const notifications = recipientIds.map((recipientId) => ({
+      recipient:   recipientId,
+      type:        'new_complaint',
+      title:       'New Complaint Submitted',
+      message:     `A new ${complaint.category.replace('_', ' ')} complaint was submitted ${location}.`,
+      complaintId: complaint._id,
+      read:        false,
+    }));
+
+    await Notification.insertMany(notifications, { ordered: false });
+  } catch (err) {
+    console.warn('[notifications] Failed to create notifications:', err.message);
+  }
+}
 
 const router = express.Router();
 
@@ -256,6 +303,9 @@ router.post('/', protect(['Student']), async (req, res, next) => {
       console.warn('[auto-assign] failed:', assignErr.message);
     }
 
+    // Send in-app notifications to admin + relevant workers
+    notifyNewComplaint(complaint);
+
     res.status(201).json({
       success: true,
       isDuplicate: false,
@@ -446,6 +496,43 @@ router.patch('/:id/verify', protect(['Admin']), async (req, res, next) => {
     complaint.reviewNote = req.body.note;
     await complaint.save();
     res.json({ success: true, data: complaint });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── PATCH /api/complaints/:id/admin-reopen ───────────────────────────────────
+// Admin can reopen a complaint they are NOT satisfied with (completed or verified).
+router.patch('/:id/admin-reopen', protect(['Admin']), async (req, res, next) => {
+  try {
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) return res.status(404).json({ success: false, message: 'Not found' });
+
+    if (!['completed', 'verified'].includes(complaint.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only completed or verified complaints can be reopened by admin',
+      });
+    }
+
+    complaint.status = 'reopened';
+    complaint.reopenReason = req.body.reason || 'Admin not satisfied with resolution';
+    complaint.isAdminVerified = false;
+    await complaint.save();
+
+    // Attempt to re-assign to original worker or auto-assign
+    let autoAssigned = { assigned: false };
+    try {
+      autoAssigned = await autoAssignComplaint(complaint);
+    } catch (assignErr) {
+      console.warn('[admin-reopen auto-assign] failed:', assignErr.message);
+    }
+
+    res.json({
+      success: true,
+      autoAssigned: autoAssigned.assigned,
+      data: complaint,
+    });
   } catch (err) {
     next(err);
   }

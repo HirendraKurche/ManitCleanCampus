@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import UpdateBanner from './components/UpdateBanner';
 import OfflineIndicator from './components/OfflineIndicator';
 import ProtectedRoute from './components/ProtectedRoute';
+import InstallPrompt from './components/InstallPrompt';
 
 import WorkerLayout  from './layouts/WorkerLayout';
 import AdminLayout   from './layouts/AdminLayout';
@@ -86,6 +87,7 @@ function App() {
                 </Routes>
 
                 <OfflineIndicator />
+                <InstallPrompt />
             </AuthProvider>
         </BrowserRouter>
     );

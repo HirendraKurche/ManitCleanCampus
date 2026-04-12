@@ -16,6 +16,7 @@ const cloudinaryRoutes = require('./routes/cloudinary');
 const syncRoutes      = require('./routes/sync');
 const adminRoutes     = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
+const notificationRoutes = require('./routes/notifications');
 // Task 2: building routes — two routers from one file
 const { publicRouter: buildingPublicRoutes, adminRouter: buildingAdminRoutes } = require('./routes/buildingRoutes');
 
@@ -39,11 +40,12 @@ const globalLimiter = rateLimit({
 app.use(globalLimiter);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/api/auth',       authRoutes);
-app.use('/api/cloudinary', cloudinaryRoutes);
-app.use('/api/sync',       syncRoutes);
-app.use('/api/admin',      adminRoutes);
-app.use('/api/complaints', complaintRoutes);
+app.use('/api/auth',          authRoutes);
+app.use('/api/cloudinary',    cloudinaryRoutes);
+app.use('/api/sync',          syncRoutes);
+app.use('/api/admin',         adminRoutes);
+app.use('/api/complaints',    complaintRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Task 2: Building management routes
 // Public endpoint — student/worker dropdown (no auth)

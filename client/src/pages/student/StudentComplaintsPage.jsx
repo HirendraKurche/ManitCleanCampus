@@ -298,11 +298,11 @@ export default function StudentComplaintsPage() {
                             </div>
                         )}
 
-                        {c.assignedTo && (
-                            <div className="bg-slate-800/60 rounded-xl p-3">
-                                <p className="text-slate-500 text-xs">Assigned to</p>
-                                <p className="text-white text-sm font-medium">{c.assignedTo.name}</p>
-                                <p className="text-slate-500 text-xs">{c.assignedTo.employeeCode}</p>
+                        {/* Worker assignment is intentionally hidden from students for privacy */}
+                        {c.assignedTo && ['assigned', 'in_progress'].includes(c.status) && (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                                <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shrink-0" />
+                                <p className="text-purple-300 text-xs">Your complaint is being worked on</p>
                             </div>
                         )}
 

@@ -257,41 +257,56 @@ export default function TasksPage() {
                         <div className="space-y-2">
                             <h3 className="text-white font-medium text-sm">Today's Assigned & Active Tasks</h3>
                             {tasks.map((t) => (
-                                <div key={t.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-white text-sm font-medium">{t.area}</p>
-                                        <p className="text-slate-500 text-xs">
-                                            {t.durationSeconds
-                                                ? fmtDuration(t.durationSeconds)
-                                                : t.status === 'pending'
-                                                ? 'Not started (Assigned)'
-                                                : 'In progress...'}
-                                        </p>
-                                    </div>
-                                    {t.status === 'pending' ? (
-                                        // ── Task 1: Start button disabled when not checked in ──
-                                        <div className="relative group">
-                                            <button
-                                                onClick={() => { setSelectedArea(t.area); setActiveTask(t); setPhase('before'); }}
-                                                disabled={tasksLocked}
-                                                className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                            >
-                                                Start
-                                            </button>
-                                            {tasksLocked && (
-                                                <div className="absolute bottom-full right-0 mb-2 w-44 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-amber-300 hidden group-hover:block z-10 pointer-events-none">
-                                                    Check in first to start tasks
-                                                </div>
+                                <div key={t.id} className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
+                                    <div className="p-3 flex items-center justify-between">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-white text-sm font-medium">{t.area}</p>
+                                            <p className="text-slate-500 text-xs">
+                                                {t.durationSeconds
+                                                    ? fmtDuration(t.durationSeconds)
+                                                    : t.status === 'pending'
+                                                    ? 'Not started (Assigned)'
+                                                    : 'In progress...'}
+                                            </p>
+                                            {t.complaintDesc && (
+                                                <p className="text-slate-400 text-xs mt-1 line-clamp-2">"{t.complaintDesc}"</p>
                                             )}
                                         </div>
-                                    ) : (
-                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
-                                            t.status === 'completed'
-                                                ? 'bg-emerald-500/20 text-emerald-400'
-                                                : 'bg-amber-500/20 text-amber-400'
-                                        }`}>
-                                            {t.status === 'completed' ? '✓ Done' : '⏱ Active'}
-                                        </span>
+                                        {t.status === 'pending' ? (
+                                            <div className="relative group shrink-0 ml-3">
+                                                <button
+                                                    onClick={() => { setSelectedArea(t.area); setActiveTask(t); setPhase('before'); }}
+                                                    disabled={tasksLocked}
+                                                    className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-lg shadow-blue-600/20 hover:bg-blue-500 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    Start
+                                                </button>
+                                                {tasksLocked && (
+                                                    <div className="absolute bottom-full right-0 mb-2 w-44 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-amber-300 hidden group-hover:block z-10 pointer-events-none">
+                                                        Check in first to start tasks
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className={`shrink-0 ml-3 px-2.5 py-1 rounded-lg text-xs font-medium ${
+                                                t.status === 'completed'
+                                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                                    : 'bg-amber-500/20 text-amber-400'
+                                            }`}>
+                                                {t.status === 'completed' ? '✓ Done' : '⏱ Active'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {/* Student complaint photo — shown to worker so they know what to fix */}
+                                    {t.complaintPhotoUrl && (
+                                        <div className="border-t border-slate-800 px-3 pb-3 pt-2">
+                                            <p className="text-slate-500 text-[10px] uppercase tracking-wide mb-1.5">Student Reported Photo</p>
+                                            <img
+                                                src={t.complaintPhotoUrl}
+                                                alt="Student complaint photo"
+                                                className="w-full rounded-lg object-cover max-h-40 border border-slate-700"
+                                            />
+                                        </div>
                                     )}
                                 </div>
                             ))}

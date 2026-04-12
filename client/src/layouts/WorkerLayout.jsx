@@ -3,12 +3,106 @@
 //   1. Reads `error` from useSync and shows a dismissible banner
 //   2. Special handling for CHECKIN_REQUIRED error code — shows clear message
 //      with a link to the Attendance tab rather than a generic "sync failed"
-//   3. All other logic (auto-sync, online indicator, nav) unchanged
+//   3. Added NotificationBell — polls /api/notifications every 30s for new complaints
+//   4. All other logic (auto-sync, online indicator, nav) unchanged
 
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import useSync from '../hooks/useSync';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import api from '../utils/api';
+import { playNotificationSound } from '../utils/notificationSound';
+
+function NotificationBell() {
+    const [unread, setUnread]   = useState(0);
+    const [open, setOpen]       = useState(false);
+    const [notices, setNotices] = useState([]);
+    const prevUnread = useRef(0);
+    const ref = useRef(null);
+
+    const fetchNotifications = async () => {
+        try {
+            const { data } = await api.get('/api/notifications');
+            if (data.success) {
+                const newCount = data.unreadCount || 0;
+                if (newCount > prevUnread.current) {
+                    playNotificationSound();
+                }
+                prevUnread.current = newCount;
+                setUnread(newCount);
+                setNotices(data.data || []);
+            }
+        } catch (_) {}
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        const id = setInterval(fetchNotifications, 30000);
+        return () => clearInterval(id);
+    }, []);
+
+    useEffect(() => {
+        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const markAllRead = async () => {
+        try {
+            await api.patch('/api/notifications/read');
+            setUnread(0);
+            setNotices((n) => n.map((x) => ({ ...x, read: true })));
+        } catch (_) {}
+    };
+
+    return (
+        <div ref={ref} className="relative">
+            <button
+                onClick={() => { setOpen((o) => !o); if (!open && unread > 0) markAllRead(); }}
+                className="relative p-2 text-slate-400 hover:text-white transition-colors rounded-lg"
+                title="Notifications"
+            >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {unread > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                        {unread > 9 ? '9+' : unread}
+                    </span>
+                )}
+            </button>
+            {open && (
+                <div className="absolute right-0 bottom-full mb-2 w-72 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                        <p className="text-white text-sm font-semibold">Notifications</p>
+                        {notices.some((n) => !n.read) && (
+                            <button onClick={markAllRead} className="text-blue-400 text-xs hover:text-blue-300">Mark all read</button>
+                        )}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-800">
+                        {notices.length === 0 ? (
+                            <p className="text-slate-500 text-sm text-center py-6">No notifications yet</p>
+                        ) : notices.map((n) => (
+                            <div key={n._id} className={`px-4 py-3 ${n.read ? 'opacity-60' : 'bg-blue-500/5'}`}>
+                                <div className="flex items-start gap-2">
+                                    {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />}
+                                    <div>
+                                        <p className="text-white text-xs font-medium">{n.title}</p>
+                                        <p className="text-slate-400 text-xs mt-0.5">{n.message}</p>
+                                        <p className="text-slate-600 text-[10px] mt-1">
+                                            {new Date(n.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 const navItems = [
     {
@@ -91,6 +185,7 @@ export default function WorkerLayout() {
                         </span>
                     )}
                     <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+                    <NotificationBell />
                     <button
                         onClick={logout}
                         className="text-slate-500 hover:text-red-400 transition-colors p-1.5"

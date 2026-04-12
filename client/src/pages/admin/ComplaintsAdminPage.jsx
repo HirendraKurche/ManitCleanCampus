@@ -84,8 +84,10 @@ export default function ComplaintsAdminPage() {
     const [filters, setFilters] = useState({ status: '', category: '' });
     const [expanded, setExpanded] = useState(null);
     const [assigningTo, setAssigningTo] = useState({});
+    const [assignBuilding, setAssignBuilding] = useState({}); // NEW: building-first filter
     const [actionLoading, setActionLoading] = useState(null);
     const [verifyNote, setVerifyNote] = useState('');
+    const [reopenReason, setReopenReason] = useState(''); // NEW: admin reopen reason
 
     const load = useCallback(async () => {
         try {
@@ -137,6 +139,20 @@ export default function ComplaintsAdminPage() {
             setVerifyNote('');
         } catch (err) {
             console.error('[verify]', err);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleAdminReopen = async (complaintId) => {
+        setActionLoading(complaintId + '-reopen');
+        try {
+            await api.patch(`/api/complaints/${complaintId}/admin-reopen`, { reason: reopenReason || 'Admin not satisfied with resolution' });
+            await load();
+            setExpanded(null);
+            setReopenReason('');
+        } catch (err) {
+            console.error('[admin-reopen]', err);
         } finally {
             setActionLoading(null);
         }
@@ -362,25 +378,43 @@ export default function ComplaintsAdminPage() {
                                                 <p className="text-slate-400 text-xs font-medium">
                                                     {c.assignedTo ? 'Reassign to another worker' : 'Assign to worker'}
                                                 </p>
+                                                {/* Step 1: Filter by building */}
+                                                <select
+                                                    value={assignBuilding[c._id] || ''}
+                                                    onChange={(e) => {
+                                                        setAssignBuilding((prev) => ({ ...prev, [c._id]: e.target.value }));
+                                                        setAssigningTo((prev) => ({ ...prev, [c._id]: '' }));
+                                                    }}
+                                                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">① Select Building</option>
+                                                    {[...new Set(workers.flatMap((w) => w.assignedAreas || []))].sort().map((b) => (
+                                                        <option key={b} value={b}>{b}</option>
+                                                    ))}
+                                                </select>
+                                                {/* Step 2: Pick worker from that building */}
                                                 <select
                                                     value={assigningTo[c._id] || ''}
                                                     onChange={(e) => setAssigningTo((prev) => ({ ...prev, [c._id]: e.target.value }))}
-                                                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    disabled={!assignBuilding[c._id]}
+                                                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
                                                 >
-                                                    <option value="">Select a worker</option>
-                                                    {workers.map((w) => (
-                                                        <option key={w._id} value={w._id}>
-                                                            {w.name} ({w.employeeCode})
-                                                            {w.assignedAreas?.length ? ` — ${w.assignedAreas.slice(0, 2).join(', ')}` : ''}
-                                                        </option>
-                                                    ))}
+                                                    <option value="">② Select Worker</option>
+                                                    {workers
+                                                        .filter((w) => !assignBuilding[c._id] || (w.assignedAreas || []).includes(assignBuilding[c._id]))
+                                                        .map((w) => (
+                                                            <option key={w._id} value={w._id}>
+                                                                {w.name} ({w.employeeCode})
+                                                            </option>
+                                                        ))
+                                                    }
                                                 </select>
                                                 <button
                                                     onClick={() => handleAssign(c._id)}
-                                                    disabled={!assigningTo[c._id] || isAssigning}
+                                                    disabled={!assigningTo[c._id] || actionLoading === c._id + '-assign'}
                                                     className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-all hover:scale-[1.02]"
                                                 >
-                                                    {isAssigning ? 'Saving...' : (c.assignedTo ? 'Reassign Task' : 'Assign Task')}
+                                                    {actionLoading === c._id + '-assign' ? 'Saving...' : (c.assignedTo ? 'Reassign Task' : 'Assign Task')}
                                                 </button>
                                             </div>
                                         )}
@@ -413,6 +447,26 @@ export default function ComplaintsAdminPage() {
                                                     className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-all hover:scale-[1.02]"
                                                 >
                                                     {isVerifying ? 'Verifying...' : '✓ Mark as Verified'}
+                                                </button>
+                                            </div>
+                                        )}
+                                        {/* Admin reopen: visible on completed OR verified complaints */}
+                                        {['completed', 'verified'].includes(c.status) && (
+                                            <div className="space-y-2 border-t border-slate-800 pt-3">
+                                                <p className="text-red-400 text-xs font-medium">Not satisfied? Reopen complaint</p>
+                                                <input
+                                                    type="text"
+                                                    value={reopenReason}
+                                                    onChange={(e) => setReopenReason(e.target.value)}
+                                                    placeholder="Reason for reopening (e.g. area still dirty)..."
+                                                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-red-500/30 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                                />
+                                                <button
+                                                    onClick={() => handleAdminReopen(c._id)}
+                                                    disabled={actionLoading === c._id + '-reopen'}
+                                                    className="w-full py-2.5 bg-red-600/80 hover:bg-red-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 transition-all hover:scale-[1.02]"
+                                                >
+                                                    {actionLoading === c._id + '-reopen' ? 'Reopening...' : '↩ Reopen — Not Verified'}
                                                 </button>
                                             </div>
                                         )}
