@@ -454,6 +454,7 @@ router.patch('/:id/assign', protect(['Admin']), async (req, res, next) => {
       task.worker = workerId;
       task.area = taskArea;
       task.status = 'pending';
+      task.date = today;
       await task.save();
     } else {
       task = await Task.create({

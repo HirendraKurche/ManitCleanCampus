@@ -91,6 +91,14 @@ export default function TasksPage() {
                                 serverId: serverTask._id,
                                 synced: true,
                             });
+                        } else {
+                            await updateRecord(STORES.TASKS, {
+                                ...existsLocal,
+                                ...serverTask,
+                                id: existsLocal.id,
+                                serverId: serverTask._id,
+                                synced: true,
+                            });
                         }
                     }
                 }
