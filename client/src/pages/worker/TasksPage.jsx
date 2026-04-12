@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import CameraCapture from '../../components/CameraCapture';
 import useGPS from '../../hooks/useGPS';
+import useSync from '../../hooks/useSync';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../utils/api';
 import { addRecord, updateRecord, getAllRecords, saveImageBlob, STORES } from '../../utils/db';
@@ -26,6 +27,7 @@ function fmtDuration(seconds) {
 export default function TasksPage() {
     const { user } = useAuth();
     const { latitude, longitude, refresh: refreshGPS } = useGPS();
+    const { syncNow } = useSync();
     const [tasks, setTasks] = useState([]);
     const [activeTask, setActiveTask] = useState(null);
     const [elapsed, setElapsed] = useState(0);
@@ -92,13 +94,23 @@ export default function TasksPage() {
                                 synced: true,
                             });
                         } else {
-                            await updateRecord(STORES.TASKS, {
-                                ...existsLocal,
-                                ...serverTask,
-                                id: existsLocal.id,
-                                serverId: serverTask._id,
-                                synced: true,
-                            });
+                            if (existsLocal.synced === false) {
+                                // Preserve local unsynced changes (like photos, status, duration)
+                                // Only ensure the mapped serverId is correct
+                                await updateRecord(STORES.TASKS, {
+                                    ...existsLocal,
+                                    serverId: serverTask._id,
+                                });
+                            } else {
+                                // Safe to overwrite stringently because local has no pending updates
+                                await updateRecord(STORES.TASKS, {
+                                    ...existsLocal,
+                                    ...serverTask,
+                                    id: existsLocal.id,
+                                    serverId: serverTask._id,
+                                    synced: true,
+                                });
+                            }
                         }
                     }
                 }
@@ -156,6 +168,8 @@ export default function TasksPage() {
         setActiveTask(currentTask);
         setPhase('running');
         setElapsed(0);
+        
+        syncNow();
     };
 
     const handleAfterPhoto = async (blob) => {
@@ -180,6 +194,8 @@ export default function TasksPage() {
 
         clearInterval(timerRef.current);
         setPhase('done');
+        
+        syncNow();
         await loadTasks();
     };
 
