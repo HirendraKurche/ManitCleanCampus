@@ -377,7 +377,7 @@ export default function UsersPage() {
             ) : (
                 <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left whitespace-nowrap">
+                        <table className="hidden md:table w-full text-left whitespace-nowrap">
                             <thead>
                                 <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
                                     <th className="px-5 py-3">Code</th>
@@ -468,6 +468,47 @@ export default function UsersPage() {
                                 ))}
                             </tbody>
                         </table>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden divide-y divide-slate-800">
+                            {filtered.map(u => (
+                                <div key={u._id} className="p-4 space-y-3 hover:bg-slate-800/30 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="text-white text-sm font-semibold">{u.name}</p>
+                                            <p className="text-blue-400 text-xs font-mono">{u.employeeCode}</p>
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium ${ROLE_STYLES[u.role] || 'bg-slate-700 text-slate-300'}`}>
+                                                {u.role}
+                                            </span>
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-medium ${u.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                                                {u.isActive ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p className="text-slate-400 text-xs">
+                                        Contact: {u.role === 'Student' ? u.email || '—' : u.phone || u.email || '—'}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1">
+                                        {u.assignedAreas?.length ? u.assignedAreas.map(a => (
+                                            <span key={a} className="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] rounded-md">{a}</span>
+                                        )) : <span className="text-slate-600 text-xs">—</span>}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800/50">
+                                        <button onClick={() => openEdit(u)} className="flex-1 text-xs font-medium px-3 py-2 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20">Edit</button>
+                                        <button onClick={() => toggleActive(u)} className={`flex-1 text-xs font-medium px-3 py-2 rounded-lg ${u.isActive ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                                            {u.isActive ? 'Deact.' : 'Act.'}
+                                        </button>
+                                        {u.role === 'Worker' && (
+                                            <button onClick={() => askDeleteWorker(u)} disabled={deletingCode === u.employeeCode} className="flex-1 text-xs font-medium px-3 py-2 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20">
+                                                {deletingCode === u.employeeCode ? '...' : 'Del'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}

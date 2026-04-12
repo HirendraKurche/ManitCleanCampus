@@ -45,13 +45,35 @@ export default function StudentLayout() {
     const { user, logout } = useAuth();
 
     return (
-        <div className="min-h-screen bg-slate-950 flex">
-            {/* Left Sidebar */}
-            <aside className="w-64 bg-slate-900/80 backdrop-blur-xl border-r border-slate-800 flex flex-col fixed left-0 top-0 h-screen z-50">
-                {/* Logo & User Info */}
+        <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row">
+            {/* Mobile Top Header */}
+            <header className="md:hidden bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-400 flex items-center justify-center text-white text-xs font-bold shadow-lg">
+                        CC
+                    </div>
+                    <div>
+                        <p className="text-white text-sm font-semibold leading-tight">{user?.name}</p>
+                        <p className="text-slate-500 text-xs">Student</p>
+                    </div>
+                </div>
+                <button
+                    onClick={logout}
+                    className="p-2 text-slate-500 hover:text-red-400 transition-colors rounded-lg hover:bg-slate-800"
+                    title="Logout"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </button>
+            </header>
+
+            {/* Desktop Left Sidebar */}
+            <aside className="hidden md:flex w-64 bg-slate-900/80 backdrop-blur-xl border-r border-slate-800 flex-col fixed left-0 top-0 h-screen z-50">
                 <div className="p-4 border-b border-slate-800">
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-400 flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-400 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-purple-500/20">
                             CC
                         </div>
                         <div>
@@ -61,7 +83,6 @@ export default function StudentLayout() {
                     </div>
                 </div>
 
-                {/* Navigation Items */}
                 <nav className="flex-1 p-4 space-y-2">
                     {navItems.map((item) => (
                         <NavLink
@@ -69,10 +90,9 @@ export default function StudentLayout() {
                             to={item.to}
                             end={item.to === '/student/complaints'}
                             className={({ isActive }) =>
-                                `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                                    isActive
-                                        ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
-                                        : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-300'
+                                `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive
+                                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+                                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-300'
                                 }`
                             }
                         >
@@ -82,7 +102,6 @@ export default function StudentLayout() {
                     ))}
                 </nav>
 
-                {/* Logout Button */}
                 <div className="p-4 border-t border-slate-800">
                     <button
                         onClick={logout}
@@ -98,17 +117,38 @@ export default function StudentLayout() {
                 </div>
             </aside>
 
-            <div className="flex-1 ml-64 flex flex-col">
-                {/* Top Bar */}
-                <header className="bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 sticky top-0 z-40">
+            {/* Main Content Wrapper */}
+            <div className="flex-1 w-full md:ml-64 flex flex-col min-h-[calc(100vh-64px)] md:min-h-screen pb-20 md:pb-0">
+                <header className="hidden md:block bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 px-6 py-4 sticky top-0 z-40">
                     <p className="text-slate-400 text-sm">Welcome back, {user?.name}</p>
                 </header>
 
-                {/* Main Content */}
-                <main className="flex-1 p-6 overflow-y-auto">
+                <main className="flex-1 p-4 md:p-6 overflow-y-auto w-full">
                     <Outlet />
                 </main>
             </div>
+
+            {/* Mobile Bottom Navigation */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 z-50">
+                <div className="flex justify-around py-2">
+                    {navItems.map((item) => (
+                        <NavLink
+                            key={item.to}
+                            to={item.to}
+                            end={item.to === '/student/complaints'}
+                            className={({ isActive }) =>
+                                `flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 ${isActive
+                                    ? 'text-purple-400'
+                                    : 'text-slate-500 hover:text-slate-300'
+                                }`
+                            }
+                        >
+                            {item.icon}
+                            <span className="text-[10px] font-medium">{item.label}</span>
+                        </NavLink>
+                    ))}
+                </div>
+            </nav>
         </div>
     );
 }

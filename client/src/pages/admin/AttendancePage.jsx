@@ -44,7 +44,7 @@ export default function AttendancePage() {
             ) : (
                 <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left whitespace-nowrap">
+                        <table className="hidden md:table w-full text-left whitespace-nowrap">
                             <thead>
                                 <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
                                     <th className="px-5 py-3 min-w-[150px]">Employee</th>
@@ -183,6 +183,58 @@ export default function AttendancePage() {
                                 ))}
                             </tbody>
                         </table>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden divide-y divide-slate-800">
+                            {attendance.map((r, i) => (
+                                <div key={i} className="p-4 space-y-4 hover:bg-slate-800/30 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="text-white text-sm font-bold">{r.name}</p>
+                                            <p className="text-blue-400 text-xs font-mono">{r.employeeCode}</p>
+                                        </div>
+                                        <div>
+                                            {r.flagged ? (
+                                                <span className="px-2.5 py-1 bg-red-500/15 text-red-400 text-xs font-medium rounded-lg">⚠ Flagged</span>
+                                            ) : r.checkOut ? (
+                                                <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 text-xs font-medium rounded-lg">Complete</span>
+                                            ) : r.checkIn ? (
+                                                <span className="px-2.5 py-1 bg-blue-500/15 text-blue-400 text-xs font-medium rounded-lg">Active</span>
+                                            ) : (
+                                                <span className="px-2.5 py-1 bg-slate-800 text-slate-500 text-xs font-medium rounded-lg">Absent</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {r.assignedAreas?.map((a) => (
+                                            <span key={a} className="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] rounded-md">{a}</span>
+                                        ))}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/50">
+                                        {[
+                                            { label: 'Check In', data: r.checkIn },
+                                            { label: 'Break Start', data: r.breakStart },
+                                            { label: 'Break End', data: r.breakEnd },
+                                            { label: 'Check Out', data: r.checkOut },
+                                        ].map((item, idx) => (
+                                            <div key={idx} className="flex gap-2">
+                                                {item.data?.imageUrl && (
+                                                    <a href={item.data.imageUrl} target="_blank" rel="noopener noreferrer" className="block w-8 h-8 rounded-md overflow-hidden bg-slate-800 border border-slate-700 shrink-0">
+                                                        <img src={item.data.imageUrl} alt={item.label} className="w-full h-full object-cover" />
+                                                    </a>
+                                                )}
+                                                <div className="flex flex-col justify-center">
+                                                    <span className="text-slate-500 text-[10px] uppercase tracking-wider">{item.label}</span>
+                                                    <span className="text-slate-300 text-xs font-medium">
+                                                        {item.data?.timestamp ? new Date(item.data.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
