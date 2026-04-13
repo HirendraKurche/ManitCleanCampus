@@ -55,6 +55,32 @@ async function notifyNewComplaint(complaint) {
     }));
 
     await Notification.insertMany(notifications, { ordered: false });
+
+    // Emit real-time socket events and Web Push notifications
+    try {
+      const io = require('../utils/socket').getIO();
+      const webpush = require('../utils/webpush');
+      
+      for (const notif of notifications) {
+        // Emit to user's personal socket room
+        io.to(notif.recipient.toString()).emit('new_notification', notif);
+        
+        // Find user to check pushSubscription
+        const user = await User.findById(notif.recipient).select('pushSubscription').lean();
+        if (user && user.pushSubscription) {
+          const payload = JSON.stringify({
+            title: notif.title,
+            message: notif.message,
+            url: '/admin/complaints' // Default URL or customizable based on role
+          });
+          webpush.sendNotification(user.pushSubscription, payload).catch(err => {
+            console.error('Push error for user', user._id, err.message);
+          });
+        }
+      }
+    } catch (socketErr) {
+      console.warn('Real-time notification emit failed:', socketErr.message);
+    }
   } catch (err) {
     console.warn('[notifications] Failed to create notifications:', err.message);
   }

@@ -8,6 +8,7 @@
 
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import useSync from '../hooks/useSync';
 import { useEffect, useState, useRef } from 'react';
 import api from '../utils/api';
@@ -17,19 +18,14 @@ function NotificationBell() {
     const [unread, setUnread]   = useState(0);
     const [open, setOpen]       = useState(false);
     const [notices, setNotices] = useState([]);
-    const prevUnread = useRef(0);
     const ref = useRef(null);
+    const socket = useSocket();
 
     const fetchNotifications = async () => {
         try {
             const { data } = await api.get('/api/notifications');
             if (data.success) {
-                const newCount = data.unreadCount || 0;
-                if (newCount > prevUnread.current) {
-                    playNotificationSound();
-                }
-                prevUnread.current = newCount;
-                setUnread(newCount);
+                setUnread(data.unreadCount || 0);
                 setNotices(data.data || []);
             }
         } catch (_) {}
@@ -37,9 +33,20 @@ function NotificationBell() {
 
     useEffect(() => {
         fetchNotifications();
-        const id = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(id);
     }, []);
+
+    useEffect(() => {
+        if (!socket) return;
+        const handleNewNotification = (notif) => {
+            playNotificationSound();
+            setUnread(prev => prev + 1);
+            setNotices(prev => [notif, ...prev].slice(0, 30));
+        };
+        socket.on('new_notification', handleNewNotification);
+        return () => {
+            socket.off('new_notification', handleNewNotification);
+        };
+    }, [socket]);
 
     useEffect(() => {
         const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };

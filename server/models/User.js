@@ -58,6 +58,11 @@ const userSchema = new mongoose.Schema(
 
     assignedAreas: [{ type: String, trim: true }],
 
+    pushSubscription: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

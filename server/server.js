@@ -17,6 +17,7 @@ const syncRoutes      = require('./routes/sync');
 const adminRoutes     = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
 const notificationRoutes = require('./routes/notifications');
+const pushRoutes = require('./routes/push');
 // Task 2: building routes — two routers from one file
 const { publicRouter: buildingPublicRoutes, adminRouter: buildingAdminRoutes } = require('./routes/buildingRoutes');
 
@@ -46,6 +47,7 @@ app.use('/api/sync',          syncRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/complaints',    complaintRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/push',          pushRoutes);
 
 // Task 2: Building management routes
 // Public endpoint — student/worker dropdown (no auth)
@@ -64,13 +66,23 @@ app.use((err, _req, res, _next) => {
   });
 });
 
+const http = require('http');
+const socketIoInit = require('./utils/socket').init;
+
 // ─── DB + Start ───────────────────────────────────────────────────────────────
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB connected');
+    
+    // Create HTTP server and wrap Express app
+    const server = http.createServer(app);
+    
+    // Initialize Socket.io
+    socketIoInit(server);
+    
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   })
   .catch((err) => {
     console.error('❌ MongoDB connection failed:', err.message);

@@ -4,10 +4,12 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
 import UpdateBanner from './components/UpdateBanner';
 import OfflineIndicator from './components/OfflineIndicator';
 import ProtectedRoute from './components/ProtectedRoute';
 import InstallPrompt from './components/InstallPrompt';
+import PushNotificationManager from './components/PushNotificationManager';
 
 import WorkerLayout  from './layouts/WorkerLayout';
 import AdminLayout   from './layouts/AdminLayout';
@@ -45,49 +47,52 @@ function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
-                <UpdateBanner />
+                <SocketProvider>
+                    <PushNotificationManager />
+                    <UpdateBanner />
 
-                <Routes>
-                    {/* Public */}
-                    <Route path="/login"    element={<LoginPage />} />
-                    <Route path="/register" element={<RegisterStudentPage />} />
-                    <Route path="/board"    element={<PublicDashboard />} />
+                    <Routes>
+                        {/* Public */}
+                        <Route path="/login"    element={<LoginPage />} />
+                        <Route path="/register" element={<RegisterStudentPage />} />
+                        <Route path="/board"    element={<PublicDashboard />} />
 
-                    <Route path="/" element={<RootRedirect />} />
+                        <Route path="/" element={<RootRedirect />} />
 
-                    {/* Worker */}
-                    <Route path="/worker" element={<ProtectedRoute roles={['Worker']}><WorkerLayout /></ProtectedRoute>}>
-                        <Route index element={<Navigate to="attendance" replace />} />
-                        <Route path="attendance" element={<WorkerAttendancePage />} />
-                        <Route path="tasks"      element={<TasksPage />} />
-                        <Route path="inventory"  element={<InventoryPage />} />
-                    </Route>
+                        {/* Worker */}
+                        <Route path="/worker" element={<ProtectedRoute roles={['Worker']}><WorkerLayout /></ProtectedRoute>}>
+                            <Route index element={<Navigate to="attendance" replace />} />
+                            <Route path="attendance" element={<WorkerAttendancePage />} />
+                            <Route path="tasks"      element={<TasksPage />} />
+                            <Route path="inventory"  element={<InventoryPage />} />
+                        </Route>
 
-                    {/* Admin */}
-                    <Route path="/admin" element={<ProtectedRoute roles={['Admin']}><AdminLayout /></ProtectedRoute>}>
-                        <Route index              element={<OverviewPage />} />
-                        <Route path="complaints"  element={<ComplaintsAdminPage />} />
-                        <Route path="buildings"   element={<BuildingManagement />} />
-                        <Route path="attendance"  element={<AdminAttendancePage />} />
-                        <Route path="tasks"       element={<TaskAuditPage />} />
-                        <Route path="inventory"   element={<InventoryAdminPage />} />
-                        <Route path="users"       element={<UsersPage />} />
-                        <Route path="flagged"     element={<FlaggedPage />} />
-                    </Route>
+                        {/* Admin */}
+                        <Route path="/admin" element={<ProtectedRoute roles={['Admin']}><AdminLayout /></ProtectedRoute>}>
+                            <Route index              element={<OverviewPage />} />
+                            <Route path="complaints"  element={<ComplaintsAdminPage />} />
+                            <Route path="buildings"   element={<BuildingManagement />} />
+                            <Route path="attendance"  element={<AdminAttendancePage />} />
+                            <Route path="tasks"       element={<TaskAuditPage />} />
+                            <Route path="inventory"   element={<InventoryAdminPage />} />
+                            <Route path="users"       element={<UsersPage />} />
+                            <Route path="flagged"     element={<FlaggedPage />} />
+                        </Route>
 
-                    {/* Student */}
-                    <Route path="/student" element={<ProtectedRoute roles={['Student']}><StudentLayout /></ProtectedRoute>}>
-                        <Route index                  element={<Navigate to="complaints" replace />} />
-                        <Route path="complaints"      element={<StudentComplaintsPage />} />
-                        <Route path="complaints/new"  element={<SubmitComplaintPage />} />
-                        <Route path="board"           element={<PublicDashboard />} />
-                    </Route>
+                        {/* Student */}
+                        <Route path="/student" element={<ProtectedRoute roles={['Student']}><StudentLayout /></ProtectedRoute>}>
+                            <Route index                  element={<Navigate to="complaints" replace />} />
+                            <Route path="complaints"      element={<StudentComplaintsPage />} />
+                            <Route path="complaints/new"  element={<SubmitComplaintPage />} />
+                            <Route path="board"           element={<PublicDashboard />} />
+                        </Route>
 
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
 
-                <OfflineIndicator />
-                <InstallPrompt />
+                    <OfflineIndicator />
+                    <InstallPrompt />
+                </SocketProvider>
             </AuthProvider>
         </BrowserRouter>
     );
