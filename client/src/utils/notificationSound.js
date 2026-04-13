@@ -1,5 +1,5 @@
 // utils/notificationSound.js
-// Plays a pleasant two-tone chime using the Web Audio API.
+// Plays a pleasant, crisp notification chime using the Web Audio API.
 // No external audio file required — sound is synthesised in the browser.
 // Works on all modern browsers; silently does nothing if Web Audio is unavailable.
 
@@ -17,7 +17,7 @@ function getCtx() {
 }
 
 /**
- * Play a short soft chime.
+ * Play an app-like crisp chime.
  * Call this whenever the unread notification count increases.
  */
 export function playNotificationSound() {
@@ -29,13 +29,13 @@ export function playNotificationSound() {
 
   const now = ctx.currentTime;
 
-  // Two-note chime: high note then slightly lower note
+  // Real app-like notification sequence (Crisp double ding: C6 -> E6)
   const notes = [
-    { freq: 880, start: 0,    duration: 0.18 },
-    { freq: 1046, start: 0.15, duration: 0.28 },
+    { freq: 1046.50, start: 0,    duration: 0.08, vol: 0.2 },
+    { freq: 1318.51, start: 0.12, duration: 0.35, vol: 0.2 },
   ];
 
-  notes.forEach(({ freq, start, duration }) => {
+  notes.forEach(({ freq, start, duration, vol }) => {
     const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
 
@@ -45,9 +45,9 @@ export function playNotificationSound() {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, now + start);
 
-    // Soft attack + decay envelope
+    // Sharp attack + exponential decay envelope for bell-like tone
     gain.gain.setValueAtTime(0, now + start);
-    gain.gain.linearRampToValueAtTime(0.18, now + start + 0.02);
+    gain.gain.linearRampToValueAtTime(vol, now + start + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.001, now + start + duration);
 
     osc.start(now + start);

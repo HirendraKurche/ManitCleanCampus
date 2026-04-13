@@ -86,7 +86,6 @@ export default function ComplaintsAdminPage() {
     const [assigningTo, setAssigningTo] = useState({});
     const [assignBuilding, setAssignBuilding] = useState({}); // NEW: building-first filter
     const [actionLoading, setActionLoading] = useState(null);
-    const [verifyNote, setVerifyNote] = useState('');
     const [reopenReason, setReopenReason] = useState(''); // NEW: admin reopen reason
 
     const load = useCallback(async () => {
@@ -133,10 +132,9 @@ export default function ComplaintsAdminPage() {
         setActionLoading(complaintId + '-verify');
         try {
             // Task 2: /verify now also sets isAdminVerified=true server-side (no change needed here)
-            await api.patch(`/api/complaints/${complaintId}/verify`, { note: verifyNote });
+            await api.patch(`/api/complaints/${complaintId}/verify`, { note: '' });
             await load();
             setExpanded(null);
-            setVerifyNote('');
         } catch (err) {
             console.error('[verify]', err);
         } finally {
@@ -434,13 +432,6 @@ export default function ComplaintsAdminPage() {
                                                         Worker before/after photos are required before admin verification.
                                                     </p>
                                                 )}
-                                                <input
-                                                    type="text"
-                                                    value={verifyNote}
-                                                    onChange={(e) => setVerifyNote(e.target.value)}
-                                                    placeholder="Optional note for student..."
-                                                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                                />
                                                 <button
                                                     onClick={() => handleVerify(c._id)}
                                                     disabled={isVerifying || !hasWorkerEvidence}
