@@ -164,6 +164,14 @@ async function autoAssignComplaint(complaint) {
     .toISOString()
     .slice(0, 10);
 
+  // If there's an existing task and it's assigned to a different worker, delete it
+  if (complaint.linkedTaskId) {
+    const oldTask = await Task.findById(complaint.linkedTaskId);
+    if (oldTask && oldTask.worker.toString() !== worker._id.toString()) {
+      await Task.deleteOne({ _id: complaint.linkedTaskId });
+    }
+  }
+
   const task = await Task.create({
     worker: worker._id,
     area: buildTaskAreaLabel(complaint),
@@ -471,30 +479,22 @@ router.patch('/:id/assign', protect(['Admin']), async (req, res, next) => {
       .toISOString()
       .slice(0, 10);
 
-    let task = null;
-    if (complaint.linkedTaskId) {
-      task = await Task.findById(complaint.linkedTaskId);
+    const oldTaskId = complaint.linkedTaskId;
+    const oldTask = oldTaskId ? await Task.findById(oldTaskId) : null;
+    const isReassignment = oldTask && oldTask.worker.toString() !== workerId.toString();
+
+    // If reassigning to a different worker, delete the old task so it doesn't appear for previous worker
+    if (isReassignment && oldTask) {
+      await Task.deleteOne({ _id: oldTaskId });
     }
 
-    if (task && task.status !== 'completed') {
-      if (task.worker.toString() !== workerId.toString()) {
-        task.status = 'pending';
-        task.beforePhotoUrl = null;
-        task.afterPhotoUrl = null;
-        task.startedAt = null;
-      }
-      task.worker = workerId;
-      task.area = taskArea;
-      task.date = today;
-      await task.save();
-    } else {
-      task = await Task.create({
-        worker: workerId,
-        area:   taskArea,
-        status: 'pending',
-        date:   today,
-      });
-    }
+    // Always create a fresh task for the new worker
+    const task = await Task.create({
+      worker: workerId,
+      area:   taskArea,
+      status: 'pending',
+      date:   today,
+    });
 
     complaint.assignedTo   = workerId;
     complaint.assignedBy   = req.user._id;
