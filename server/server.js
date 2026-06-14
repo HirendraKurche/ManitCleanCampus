@@ -13,6 +13,7 @@ const rateLimit = require('express-rate-limit');
 
 const authRoutes      = require('./routes/auth');
 const cloudinaryRoutes = require('./routes/cloudinary');
+const uploadRoutes = require('./routes/upload');
 const syncRoutes      = require('./routes/sync');
 const adminRoutes     = require('./routes/admin');
 const complaintRoutes = require('./routes/complaints');
@@ -43,6 +44,11 @@ app.use(globalLimiter);
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
 app.use('/api/cloudinary',    cloudinaryRoutes);
+app.use('/api/upload',        uploadRoutes);
+
+// Serve local uploads statically
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/sync',          syncRoutes);
 app.use('/api/admin',         adminRoutes);
 app.use('/api/complaints',    complaintRoutes);
