@@ -18,6 +18,8 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
     const [previewBlob, setPreviewBlob] = useState(null);
     const [error, setError] = useState(null);
     const [videoReady, setVideoReady] = useState(false);
+    const [useFallback, setUseFallback] = useState(false);
+    const fileInputRef = useRef(null);
 
     // Manage local facing mode to allow flipping
     const [currentFacingMode, setCurrentFacingMode] = useState(facingMode);
@@ -45,7 +47,8 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
         try {
             // Check if getUserMedia is available
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setError('Camera not supported on this browser. Try using Chrome or Edge.');
+                console.warn('getUserMedia not supported, using file input fallback.');
+                setUseFallback(true);
                 return;
             }
 
@@ -66,12 +69,11 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
             setActive(true);
         } catch (err) {
             console.error('[camera]', err);
-            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                setError(
-                    'Camera permission denied. Please click the camera icon in your browser\'s address bar and allow access, then try again.'
-                );
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.name === 'NotSupportedError' || err.message.includes('Only secure origins')) {
+                console.warn('Camera blocked by HTTP/Permissions. Switching to native file input.');
+                setUseFallback(true);
             } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                setError('No camera found on this device.');
+                setUseFallback(true);
             } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
                 setError('Camera is in use by another application. Please close it and try again.');
             } else if (err.name === 'OverconstrainedError') {
@@ -144,6 +146,14 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
             0.85
         );
     }, [stopCamera, currentFacingMode]);
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setPreview(URL.createObjectURL(file));
+            setPreviewBlob(file);
+        }
+    };
 
     const retake = () => {
         setPreview(null);
@@ -255,18 +265,41 @@ export default function CameraCapture({ onCapture, label = 'Take Photo', facingM
     // Default — trigger button (shown when autoStart is false or camera failed)
     return (
         <div className="space-y-2">
-            <button
-                type="button"
-                onClick={startCamera}
-                className="w-full py-3.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 border-dashed rounded-xl text-slate-300 font-medium flex items-center justify-center gap-2 transition-all hover:border-blue-500/50"
-            >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                {error ? 'Retry Camera' : label}
-            </button>
-            {error && (
+            {!useFallback ? (
+                <button
+                    type="button"
+                    onClick={startCamera}
+                    className="w-full py-3.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 border-dashed rounded-xl text-slate-300 font-medium flex items-center justify-center gap-2 transition-all hover:border-blue-500/50"
+                >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {error ? 'Retry Camera' : label}
+                </button>
+            ) : (
+                <div className="space-y-2">
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-3.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 border-dashed rounded-xl text-blue-400 font-medium flex items-center justify-center gap-2 transition-all"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Tap to Use Device Camera / Gallery
+                    </button>
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        capture={currentFacingMode} 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        onChange={handleFileChange} 
+                    />
+                </div>
+            )}
+            {error && !useFallback && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm">
                     <p>{error}</p>
                     <p className="text-red-500/60 text-xs mt-1">
