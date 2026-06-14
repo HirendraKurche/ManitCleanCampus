@@ -28,8 +28,9 @@ export async function uploadToCloudinary(blob, options = {}) {
     throw new Error('Local upload failed');
   }
 
-  // Construct absolute URL so DB stores it and frontend renders it easily
-  return `${import.meta.env.VITE_API_URL}${data.url}`;
+  // Construct absolute URL using VITE_API_BASE_URL (removing the /api suffix)
+  const baseUrl = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : 'http://10.3.1.205:5000';
+  return `${baseUrl}${data.url}`;
 }
 
 /**
