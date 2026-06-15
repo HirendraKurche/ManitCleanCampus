@@ -25,7 +25,10 @@ const { publicRouter: buildingPublicRoutes, adminRouter: buildingAdminRoutes } =
 const app = express();
 
 // ─── Security Middleware ───────────────────────────────────────────────────────
-app.use(helmet());
+// Disable strict Cross-Origin Resource Policy so frontend can load images
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+}));
 app.use(cors({
   origin: true,
   credentials: true,
