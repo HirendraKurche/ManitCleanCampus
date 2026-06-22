@@ -438,7 +438,6 @@ export default function SubmitComplaintPage() {
                         onCapture={handlePhotoCapture}
                         label="Take Photo of Issue"
                         facingMode="environment"
-                        autoStart={false}
                     />
                 )}
             </div>
