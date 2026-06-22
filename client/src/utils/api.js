@@ -7,7 +7,7 @@ import axios from 'axios';
  * On 401 responses, clears the stored token and redirects to login.
  */
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '', // Falls back to relative path if not set
+  baseURL: typeof window !== 'undefined' ? window.location.origin : (import.meta.env.VITE_API_URL || ''),
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true, // send httpOnly cookies too
 });

@@ -22,7 +22,8 @@ export const SocketProvider = ({ children }) => {
             return;
         }
 
-        const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
+        const socketUrl = typeof window !== 'undefined' ? window.location.origin : (import.meta.env.VITE_API_URL || 'http://localhost:5000');
+        const newSocket = io(socketUrl, {
             withCredentials: true,
         });
 

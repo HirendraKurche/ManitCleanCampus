@@ -30,6 +30,17 @@ const app = express();
 // Disable strict Cross-Origin Resource Policy so frontend can load images
 app.use(helmet({
   crossOriginResourcePolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: ["'self'", 'https://10.3.1.205:5176', 'wss://10.3.1.205:5176', 'https://10.3.1.205:5000', 'wss://10.3.1.205:5000'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      fontSrc: ["'self'", 'data:'],
+      objectSrc: ["'none'"],
+    },
+  },
 }));
 app.use(cors({
   origin: true,

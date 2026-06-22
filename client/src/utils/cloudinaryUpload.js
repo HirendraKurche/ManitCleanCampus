@@ -29,7 +29,9 @@ export async function uploadToCloudinary(blob, options = {}) {
   }
 
   // Construct absolute URL using VITE_API_BASE_URL (removing the /api suffix)
-  const baseUrl = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : 'http://10.3.1.205:5000';
+  const baseUrl = typeof window !== 'undefined'
+    ? window.location.origin
+    : (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : 'http://10.3.1.205:5000');
   return `${baseUrl}${data.url}`;
 }
 
