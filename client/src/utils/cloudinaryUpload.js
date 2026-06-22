@@ -1,37 +1,25 @@
 import api from './api';
 
 /**
- * Direct-to-Local Upload
- *
- * Flow:
- * 1. POST the image blob to our local backend (/api/upload)
- * 2. Return the absolute URL pointing to the local VM
- */
-
-/**
- * Upload a single image blob directly to the backend.
+ * Upload a single image blob to the VM-local backend.
  * @param {Blob} blob - The image blob (from camera capture or IndexedDB)
- * @param {object} options - { folder?, publicId? } (Unused for local upload but kept for compatibility)
- * @returns {Promise<string>} The local URL
+ * @returns {Promise<string>} The absolute URL on the current VM origin
  */
-export async function uploadToCloudinary(blob, options = {}) {
-  // Build the FormData
+export async function uploadToLocalStorage(blob) {
   const formData = new FormData();
   formData.append('file', blob, 'image.jpg');
 
-  // Upload to local backend
   const { data } = await api.post('/api/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
 
   if (!data.success) {
     throw new Error('Local upload failed');
   }
 
-  // Construct absolute URL using VITE_API_BASE_URL (removing the /api suffix)
   const baseUrl = typeof window !== 'undefined'
     ? window.location.origin
-    : (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : 'http://10.3.1.205:5000');
+    : (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : 'http://10.3.1.205:5176');
   return `${baseUrl}${data.url}`;
 }
 
@@ -40,15 +28,14 @@ export async function uploadToCloudinary(blob, options = {}) {
  * Returns an array of { field, url } objects.
  *
  * @param {Array<{ blob: Blob, field: string }>} images
- * @param {string} folder - Unused but kept for compatibility
  * @returns {Promise<Array<{ field: string, url: string }>>}
  */
-export async function uploadMultipleImages(images, folder) {
+export async function uploadMultipleImages(images) {
   const results = [];
 
   for (const { blob, field } of images) {
     try {
-      const url = await uploadToCloudinary(blob, { folder });
+      const url = await uploadToLocalStorage(blob);
       results.push({ field, url });
     } catch (err) {
       console.error(`[upload] Failed to upload ${field}:`, err.message);
@@ -59,4 +46,4 @@ export async function uploadMultipleImages(images, folder) {
   return results;
 }
 
-export default { uploadToCloudinary, uploadMultipleImages };
+export default { uploadToLocalStorage, uploadMultipleImages };

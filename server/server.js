@@ -14,7 +14,6 @@ const fs = require('fs');
 const path = require('path');
 
 const authRoutes      = require('./routes/auth');
-const cloudinaryRoutes = require('./routes/cloudinary');
 const uploadRoutes = require('./routes/upload');
 const syncRoutes      = require('./routes/sync');
 const adminRoutes     = require('./routes/admin');
@@ -59,7 +58,6 @@ app.use(globalLimiter);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
-app.use('/api/cloudinary',    cloudinaryRoutes);
 app.use('/api/upload',        uploadRoutes);
 
 // Serve local uploads statically

@@ -11,7 +11,7 @@
 import { useCallback, useRef, useState } from 'react';
 import useOnlineStatus from './useOnlineStatus';
 import api from '../utils/api';
-import { uploadToCloudinary } from '../utils/cloudinaryUpload';
+import { uploadToLocalStorage } from '../utils/cloudinaryUpload';
 import {
   getUnsyncedRecords,
   getLinkedImages,
@@ -51,7 +51,7 @@ export default function useSync() {
           const images = await getLinkedImages(STORES.ATTENDANCE, record.id);
           for (const img of images) {
             try {
-              const url = await uploadToCloudinary(img.blob, { folder: 'facility/attendance' });
+              const url = await uploadToLocalStorage(img.blob);
               const stamp = record[img.field];
               if (stamp) stamp.imageUrl = url;
             } catch (e) {
@@ -69,7 +69,7 @@ export default function useSync() {
           const images = await getLinkedImages(STORES.TASKS, record.id);
           for (const img of images) {
             try {
-              const url = await uploadToCloudinary(img.blob, { folder: 'facility/tasks' });
+              const url = await uploadToLocalStorage(img.blob);
               if (img.field === 'beforePhoto') record.beforePhotoUrl = url;
               if (img.field === 'afterPhoto')  record.afterPhotoUrl  = url;
             } catch (e) {

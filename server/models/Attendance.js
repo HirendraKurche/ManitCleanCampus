@@ -5,7 +5,7 @@ const stampSchema = new mongoose.Schema(
   {
     timestamp:     { type: Date },            // device-reported time
     serverTime:    { type: Date },            // set by backend on receipt — used for "Time-Travel" detection
-    imageUrl:      { type: String },          // Cloudinary URL of selfie
+    imageUrl:      { type: String },          // Local VM upload URL of selfie
     gps: {
       latitude:    { type: Number },
       longitude:   { type: Number },

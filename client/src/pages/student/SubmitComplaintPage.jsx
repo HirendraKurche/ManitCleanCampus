@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import CameraCapture from '../../components/CameraCapture';
 import useGPS from '../../hooks/useGPS';
 import api from '../../utils/api';
-import { uploadToCloudinary } from '../../utils/cloudinaryUpload';
+import { uploadToLocalStorage } from '../../utils/cloudinaryUpload';
 import { cacheBuildingsLocally, getCachedBuildings } from '../../utils/db';
 
 // Task 5: cleaning-only categories (matches schema enum)
@@ -126,7 +126,7 @@ export default function SubmitComplaintPage() {
         try {
             let photoUrl = null;
             if (photoBlob) {
-                photoUrl = await uploadToCloudinary(photoBlob, { folder: 'facility/complaints' });
+                photoUrl = await uploadToLocalStorage(photoBlob);
             }
 
             // Task 5: structured location payload
