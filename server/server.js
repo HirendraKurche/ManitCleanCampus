@@ -10,6 +10,8 @@ const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 
 const authRoutes      = require('./routes/auth');
 const cloudinaryRoutes = require('./routes/cloudinary');
@@ -50,7 +52,6 @@ app.use('/api/cloudinary',    cloudinaryRoutes);
 app.use('/api/upload',        uploadRoutes);
 
 // Serve local uploads statically
-const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/sync',          syncRoutes);
 app.use('/api/admin',         adminRoutes);
@@ -63,6 +64,14 @@ app.use('/api/push',          pushRoutes);
 app.use('/api/buildings', buildingPublicRoutes);
 // Admin CRUD — protected inside the router with protect(['Admin'])
 app.use('/api/admin/buildings', buildingAdminRoutes);
+
+const clientDistPath = path.resolve(__dirname, '../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get(/^\/(?!api|uploads).*/, (_req, res) => {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
 
@@ -84,13 +93,28 @@ mongoose
   .then(() => {
     console.log('✅ MongoDB connected');
     
-    // Create HTTP server and wrap Express app
-    const server = http.createServer(app);
+    const PORT = process.env.PORT || 5176;
+    const httpsKeyPath = process.env.HTTPS_KEY_PATH || path.resolve(__dirname, 'certs/key.pem');
+    const httpsCertPath = process.env.HTTPS_CERT_PATH || path.resolve(__dirname, 'certs/cert.pem');
+    const useHttps = fs.existsSync(httpsKeyPath) && fs.existsSync(httpsCertPath);
+
+    let server;
+    if (useHttps) {
+      const https = require('https');
+      server = https.createServer({
+        key: fs.readFileSync(httpsKeyPath),
+        cert: fs.readFileSync(httpsCertPath),
+      }, app);
+      console.log('🔐 HTTPS enabled for camera access');
+    } else {
+      const http = require('http');
+      server = http.createServer(app);
+      console.log('⚠️  HTTPS cert not found, starting HTTP server');
+    }
     
     // Initialize Socket.io
     socketIoInit(server);
     
-    const PORT = process.env.PORT || 5000;
     server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   })
   .catch((err) => {
